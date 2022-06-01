@@ -354,7 +354,7 @@ class Argument:
         arg.header_str = header_str
         arg.call_str   = call_str
         for k, v in kwargs:
-            setattr(self, k, v)
+            setattr(arg, k, v)
         return arg
         
     @property
@@ -394,7 +394,7 @@ class Argument:
                     return f"*{self.name}"
             else:
                 if self.is_self:
-                    return f"self"
+                    return "self"
                 else:
                     return f"{self.name}=None"
         
@@ -1080,6 +1080,90 @@ class WNode:
                 
         if s != "":
             yield s + "]"
+            
+    # ====================================================================================================
+    # Generate the node class md file
+    
+    def gen_md(self, wrap_parameters=True):
+        
+        args = self.get_node_arguments()
+        
+        # ---------------------------------------------------------------------------
+        # Class comment
+    
+        yield f"# {self.node_name}"
+        yield  "\n\n"
+        yield f"\n> Geometry node: ***{self.bl_idname}***\n"
+        
+        yield  "\n## Initialization\n"
+        yield  "\n```python"
+        yield f"\n{self.node_name}("
+
+        s = args.sheader
+        if s != "":
+            yield s + ", "
+        yield "label=None)\n"
+        yield  "\n```"
+        
+        yield "\n## Arguments"
+    
+        if self.inputs:
+            yield "\n### Input sockets"
+            for uname, wsock in self.inputs.unames.items():
+                yield f"\n  - **{uname}** : "
+                if isinstance(wsock, list):
+                    yield f"**{self.driving_param}** dependant"
+                else:
+                    if wsock.is_multi_input:
+                        yield "*"
+                    yield f"_{wsock.class_name}_"
+        
+        if self.parameters:
+            yield "\n### Parameters"
+            for name, param in self.parameters.items():
+                yield f"\n  - **{name}** : "
+                #stype = type(param.default).__name__
+                stype = param.param_type
+                sdef = f"'{param.default}'" if stype == 'str' else f"_{param.default}_"
+                yield sdef
+                
+                if param.is_enum:
+                    yield f" in {param.values}"
+                else:
+                    yield " " + stype
+
+        yield "\n### Node label"
+        yield "\n  - **label** : Geometry node label"
+                    
+                    
+        if self.has_shared_sockets:
+            yield  "\n## Data type dependant sockets"
+            yield f"\n  - Driving parameter : **{self.driving_param}** in {self.parameters[self.driving_param].values}\n"
+            
+            inds = self.inputs.shared_sockets
+            if inds:
+                yield f"\n  - Input sockets : {list(inds.keys())}"
+            inds = self.outputs.shared_sockets
+            if inds:
+                yield f"\n  - Output sockets : {list(inds.keys())}"
+    
+        if self.outputs:
+            yield "\n## Output sockets"
+            for uname, wsock in self.outputs.unames.items():
+                yield f"\n  - **{uname}** : "
+                if isinstance(wsock, list):
+                    yield f"**{self.driving_param}** dependant"
+                else:
+                    yield f"_{wsock.class_name}_"
+                    if wsock.is_multi_input:
+                        yield " (multi input)"
+                        
+        yield "\n## Data sockets"
+        yield "\nData socket classes implementing this node"
+                        
+        yield "\n"
+        
+            
     
     # ====================================================================================================
     # Generate the node class
@@ -1166,7 +1250,7 @@ class WNode:
         #
         # def __init__(self, input sockets, param sockets, label):
     
-        yield _1_ + f"def __init__(self"
+        yield _1_ + "def __init__(self"
         s = args.sheader
         if s != "":
             yield ", " + s
@@ -1186,7 +1270,7 @@ class WNode:
         
         yield_comment = True
         if False:
-            yield _2_ + f"self.parameters = ["
+            yield _2_ + "self.parameters = ["
             sep = ""
             for name in self.parameters:
                 yield f"{sep}'{name}'"
@@ -1385,11 +1469,11 @@ class WNode:
         
         args     = Arguments()
         arg_self = False
-        arg_mult = False
+        #arg_mult = False
 
         if family in ['CAPT_ATTR', 'ATTRIBUTE']:
             args.add(Argument.Other(header_str="self", call_str=""))
-            arg_self = True
+            #arg_self = True
             
         #for uname, wsocks in self.inputs.unames.items():
         for uname in inp_unames:
@@ -1485,7 +1569,7 @@ class WNode:
 
         else:
             if len(ret_unames) == 0:
-                yield _3_ + f"self\n"
+                yield _3_ + "self\n"
 
             elif len(ret_unames) == 1:
                 yield _3_ + ret_unames[list(ret_unames)[0]]
@@ -1657,7 +1741,10 @@ class WNode:
 # ====================================================================================================
 # Generate the nodes module
 
-def create_nodes_module(fname):
+def create_nodes_module(fpath):
+    
+    fname = fpath + "nodes/nodes.py"
+    
     with open(fname, 'w') as f:
         f.write("from geonodes.core.node import Node\n")
         
@@ -1690,30 +1777,60 @@ def create_nodes_module(fname):
             for line in wn.gen_node_class():
                 f.write(line)
                 
+            # ----- md file
+            
+            fmd = fpath + f"docs/nodes/{wn.node_name}.md"
+            with open(fmd, 'w') as fd:
+                for line in wn.gen_md():
+                    fd.write(line)
+                    
+                    
+                
 def gen_geonodes(fpath=None):
 
-    fpath = "/Users/alain/Documents/blender/scripts/modules/geonodes/"
+    #fpath = "/Users/alain/Documents/blender/scripts/modules/geonodes/"
     
     # ----- nodes.py
 
-    create_nodes_module(fpath + "nodes/nodes.py")
+    create_nodes_module(fpath)
     #create_nodes_module("/Users/alain/Documents/blender/scripts/modules/geonodes/nodes/nodes.py")
 
     # ----- sockets files
 
     gsock.GEN_NODES = []
+    class_gens = []
+    
+    nodes_md = {}
 
     for i, dgen in enumerate(gsock.DATA_CLASSES):
         
         class_gen = dgen(WNode.WNODES)
+        class_gens.append(class_gen)
         
-        #with open(get_folder("sockets").joinpath(f"{class_gen.class_name.lower()}.py"), 'w') as f:
         with open(fpath + f"sockets/{class_gen.class_name.lower()}.py", 'w') as f:
 
             for line in class_gen.gen_class():
                 f.write(line)
                 
             f.write("\n\n")
+            
+        class_gen.feed_nodes_md(nodes_md)
+        
+    # ----- Complement the nodes doc with the reference of the classes
+    
+    for node_name, refs in nodes_md.items():
+        fname = fpath + f"docs/nodes/{node_name}.md"
+        with open(fname, 'a') as f:
+            for family, meths in refs.items():
+                f.write(f"\n### {family}")
+                for meth in meths:
+                    f.write(f"\n  - {meth}")
+                    
+                
+            
+            
+        
+            
                 
                 
 """                    
