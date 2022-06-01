@@ -464,6 +464,25 @@ class DataClass:
                 for line in nc.wnode.gen_call(family, nc.class_name, nc.meth_name, self_name=nc.self_name, properties=nc.properties, attribute=nc.attribute, **nc.fixed):
                     yield line
                     
+                    
+    def feed_nodes_md(self, nodes_md):
+                    
+        for family, label in FAMILIES.items():
+            meths = self.methods(family)
+            if meths:
+                meths.sort(key=lambda nc: nc.meth_name)
+
+                for nc in meths:
+                    node_name = nc.wnode.node_name
+                    if nodes_md.get(node_name) is None:
+                        nodes_md[node_name] = {}
+                    if nodes_md[node_name].get(label[1]) is None:
+                        nodes_md[node_name][label[1]] = []
+                    nodes_md[node_name][label[1]].append(f"**{self.class_name}**._{nc.meth_name}_")
+                    
+            
+                    
+                    
 
 # -----------------------------------------------------------------------------------------------------------------------------
 # Global functions
