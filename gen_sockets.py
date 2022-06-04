@@ -1,10 +1,12 @@
-{}#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Fri May 13 14:49:27 2022
 
 @author: alain
 """
+
+from generator import gen_doc as gd
 
 def indent_set(depth=0):
     _indent_ = "    "
@@ -24,7 +26,7 @@ FAMILIES = {
     'STATIC'      : ('Static method',    'Static methods'        , False),
     'CLASS'       : ('Class method',     'Class methods'         , False),    
     'PROPERTY'    : ('Property',         'Properties'            , True ),
-    'CAPT_ATTR'   : ('Capture attribute','Attribute captures'    , True ),
+    'CAPT_ATTR'   : ('Capture attribute','Attribute capture'     , True ),
     'ATTRIBUTE'   : ('Attribute',        'Attributes'            , True ),
     'METHOD'      : ('Method',           'Methods'               , True ),        
     'STACK'       : ('Stacked method',   'Stacked methods'       , True ),
@@ -183,12 +185,42 @@ class NodeCall:
             'names'    : prop_names,
             }
         return nc
+    
+    # ----------------------------------------------------------------------------------------------------
+    # Attribute capture
+    
+    @classmethod
+    def AttributeCapture(cls, wnode, class_name, attr_name, default_domain='POINT'):
+        
+        nc = cls('CAPT_ATTR', wnode, class_name, f"capture_{attr_name}")
+
+        nc.attribute = {
+            'domain' : default_domain,
+        }
+        
+        return nc
+    
+    # ----------------------------------------------------------------------------------------------------
+    # An attribute
+    
+    @classmethod
+    def Attribute(cls, wnode, class_name, meth_name, attr_name, domain='POINT', output_index=0):
+        
+        nc = cls('ATTRIBUTE', wnode, class_name, meth_name)
+        
+        nc.attribute = {
+            'capture_meth' : f"capture_{attr_name}",
+            'domain'       : domain,
+            'output_index' : output_index,
+        }
+        
+        return nc    
 
     # ----------------------------------------------------------------------------------------------------
     # An attribute
     
     @classmethod
-    def Attribute(cls, wnode, class_name, meth_name, capture_meth=None, domain='POINT', output_index=0):
+    def Attribute_OLD(cls, wnode, class_name, meth_name, capture_meth=None, domain='POINT', output_index=0):
         
         capture = capture_meth is None
 
@@ -261,6 +293,10 @@ class DataClass:
         self.methods_    = []
         
         self.is_global   = False
+        
+        # ----- Communication
+        
+        self.doc = gd.Section(f"Class {self.class_name}", level=0)
         
         # ----------------------------------------------------------------------------------------------------
         # Add the multi classes methods
@@ -343,7 +379,16 @@ class DataClass:
     # ----------------------------------------------------------------------------------------------------
     # Add attributes
     
-    def add_attribute(self, bl_idname, meth_name, capture=False, domains=None, no_prefix='NONE', prop_names=None):
+    def add_attr_capture(self, bl_idname, attr_name, default_domain='POINT'):
+        self.methods_.append(NodeCall.AttributeCapture(self.wnodes[bl_idname], self.class_name, attr_name, default_domain=default_domain))
+        
+    def add_attribute(self, bl_idname, meth_name, attr_name, domain='POINT'):
+        
+        names = [meth_name] if type(meth_name) is str else meth_name
+        for index, name in enumerate(names):
+            self.methods_.append(NodeCall.Attribute(self.wnodes[bl_idname], self.class_name, name, attr_name=attr_name, domain=domain, output_index=index))
+            
+    def add_attribute_OLD(self, bl_idname, meth_name, capture=False, domains=None, no_prefix='NONE', prop_names=None):
 
         if domains is None:
             domains = ['POINT', 'EDGE', 'FACE', 'CORNER', 'CURVE', 'INSTANCE']
@@ -577,7 +622,6 @@ class FloatGen(DataClass):
         self.add_call('METHOD', 'FunctionNodeValueToString',  'to_string',    ret_class='String' )
 
         self.add_call('METHOD', 'ShaderNodeValToRGB',        'color_ramp'       )
-        
 
         self.add_call('STACK', 'ShaderNodeFloatCurve',       'curve'            )
         self.add_call('STACK', 'ShaderNodeClamp',            'clamp'            )
@@ -682,21 +726,31 @@ class GeometryGen(DataClass):
     def __init__(self, nodes):
         super().__init__(nodes, 'Geometry', 'dsock.Geometry')
         
-        self.add_attribute('GeometryNodeInputNormal',       'normal',           domains=None  , capture=True)
-        self.add_attribute('GeometryNodeInputTangent',      'tangent',          domains=None  , capture=True)
+        self.add_call('STATIC', 'GeometryNodeIsViewport', 'is_viewport')
+
+        # ----- Attributes captures
         
-        # ----- ID and Index
+        self.add_attr_capture('GeometryNodeInputID',        'ID',       default_domain='POINT'  )
+        self.add_attr_capture('GeometryNodeInputIndex',     'index',    default_domain='POINT'  )
+        self.add_attr_capture('GeometryNodeInputNormal',    'normal',   default_domain='FACE'   )
+        self.add_attr_capture('GeometryNodeInputPosition',  'position', default_domain='POINT'  )
+        self.add_attr_capture('GeometryNodeInputRadius',    'radius',   default_domain='POINT'  )
         
-        self.add_attribute('GeometryNodeInputID',           'ID',               capture=True, domains=['POINT']  )
-        self.add_attribute('GeometryNodeInputIndex',        'index',            capture=True, domains=['POINT']  )        
-        self.add_attribute('GeometryNodeInputPosition',     'position',         capture=True, domains=['POINT']  , no_prefix='POINT')
-        self.add_attribute('GeometryNodeIsViewport',        'is_viewport',      capture=True, domains=['POINT']  )
+        # ----- Default versions
+
+        self.add_attribute('GeometryNodeInputID',        'ID',       'ID',       domain='POINT'  )
+        self.add_attribute('GeometryNodeInputIndex',     'index',    'index',    domain='POINT'  )
+        self.add_attribute('GeometryNodeInputNormal',    'normal',   'normal',   domain='FACE'   )
+        self.add_attribute('GeometryNodeInputPosition',  'position', 'position', domain='POINT'  )
+        self.add_attribute('GeometryNodeInputRadius',    'radius',   'radius',   domain='POINT'  )
         
+        # ----- Properties
         
         self.add_property('GeometryNodeBoundBox',           'bound_box',  prop_names=['box', 'box_min', 'box_max'])
         self.add_property('GeometryNodeSeparateComponents', 'components', 
                           prop_names=('mesh_component', 'points_component', 'curve_component', 'volume_component', 'instances_component'))
         
+        # ----- Methods
         
         self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_boolean', data_type = 'BOOLEAN'      )
         self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_integer', data_type = 'INT'          )
@@ -724,14 +778,12 @@ class GeometryGen(DataClass):
         self.add_call('METHOD', 'GeometryNodeJoinGeometry',         'join'                  )
         self.add_call('METHOD', 'GeometryNodeProximity',            'proximity'             )
         
-        
-        
 # -----------------------------------------------------------------------------------------------------------------------------
 # Mesh  
         
 class MeshGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Mesh', 'gn.Geometry')
+        super().__init__(nodes, 'Mesh', 'Geometry')
         
         # ----------------------------------------------------------------------------------------------------
         # Constructors
@@ -752,31 +804,59 @@ class MeshGen(DataClass):
         self.add_call('METHOD', 'GeometryNodeMeshBoolean', 'union',      operation='UNION'      )
         self.add_call('METHOD', 'GeometryNodeMeshBoolean', 'difference', self_name='mesh_1',    operation='DIFFERENCE')
         
-        # ----------------------------------------------------------------------------------------------------
-        # Attributes
+        # ----- Attributes captures
+        # domains = ['POINT', 'EDGE', 'FACE', 'CORNER', 'CURVE', 'INSTANCE']
 
-        self.add_attribute('GeometryNodeInputID',                   'ID',              domains={'FACE', 'EDGE', 'CORNER'})
-        self.add_attribute('GeometryNodeInputIndex',                'index',           domains={'FACE', 'EDGE', 'CORNER'})
-        self.add_attribute('GeometryNodeInputIndex',                'position',        domains={'FACE', 'EDGE', 'CORNER'})
+        self.add_attr_capture('GeometryNodeInputMeshEdgeAngle',     'edge_angle',       default_domain='EDGE' )
+        self.add_attr_capture('GeometryNodeInputMeshEdgeNeighbors', 'edge_neighbors',   default_domain='EDGE' )
+        self.add_attr_capture('GeometryNodeInputMeshEdgeVertices',  'edge_vertices',    default_domain='EDGE' )
+        self.add_attr_capture('GeometryNodeInputMeshFaceArea',      'face_area',        default_domain='FACE' )
+        self.add_attr_capture('GeometryNodeInputMeshFaceNeighbors', 'face_neighbors',   default_domain='FACE' )
+        self.add_attr_capture('GeometryNodeInputMeshIsland',        'island',           default_domain='POINT')
+        self.add_attr_capture('GeometryNodeInputShadeSmooth',       'shade_smooth',     default_domain='FACE' )
+        self.add_attr_capture('GeometryNodeInputMeshVertexNeighbors', 'vertex_neighbors', default_domain='POINT' )
         
-        self.add_attribute('GeometryNodeInputMeshEdgeNeighbors',   'edge_neighbors',   capture=True, domains=['EDGE']  , no_prefix='EDGE')
-        self.add_attribute('GeometryNodeInputMeshFaceArea',        'face_area',        capture=True, domains=['FACE']  , no_prefix='FACE')
-        self.add_attribute('GeometryNodeInputMeshEdgeAngle',       'edge_angle',       capture=True, domains=['EDGE']  , prop_names=('edge_unsigned_angle', 'edge_angle'))
-        self.add_attribute('GeometryNodeInputMeshEdgeVertices',    'edge_vertices',    capture=True, domains=['EDGE']  , 
-                           prop_names=('edge_vertices_index1', 'edge_vertices_index2', 'edge_vertices_position1', 'edge_vertices_position2'))
-        self.add_attribute('GeometryNodeInputMeshFaceNeighbors',   'face_neighbors',   capture=True, domains=['FACE']  ,
-                           prop_names=('face_neighbors_vertex_count', 'face_neighbors_face_count'))
-        self.add_attribute('GeometryNodeInputMeshIsland',          'island',           capture=True, domains=['FACE']  , prop_names=('island_index', 'island_count'))
-        self.add_attribute('GeometryNodeInputMeshVertexNeighbors', 'vertex_neighbors', capture=True, domains=['POINT'] ,
-                           prop_names=('vertex_neighbors_vertex_count', 'vertex_neighbors_face_count'))
+        self.add_attr_capture('GeometryNodeInputMaterialIndex',     'material_index',     default_domain='FACE' )
+        self.add_attr_capture('GeometryNodeMaterialSelection',      'material_selection', default_domain='FACE' )
         
+
+        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'face_ID',         'ID',           domain='FACE' )
+        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'egde_ID',         'ID',           domain='EDGE' )
+        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'corner_ID',       'ID',           domain='CORNER' )
+
+        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'face_index',      'index',        domain='FACE' )
+        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'egde_index',      'index',        domain='EDGE' )
+        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'corner_index',    'index',        domain='CORNER' )
+
+        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'face_position',   'position',     domain='FACE' )
+        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'egde_position',   'position',     domain='EDGE' )
+        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'corner_porision', 'position',     domain='CORNER' )
+
+
+        meth_names = ['edge_angle', 'edge_unsigned_angle']
+        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     meth_names,        'edge_angle',       domain='EDGE' )
+
+        self.add_attribute('GeometryNodeInputMeshEdgeNeighbors', 'edge_neighbors',   'edge_neighbors',  domain='EDGE' )
         
-        self.add_attribute('GeometryNodeInputMaterialIndex',       'material_index',   capture=True, domains=['FACE']  , no_prefix='FACE')
-        self.add_attribute('GeometryNodeInputShadeSmooth',         'shade_smooth',     capture=True, domains=['FACE']  , no_prefix='FACE')
+        meth_names = ['edge_vertices_index1', 'edge_vertices_index2', 'edge_vertices_position1', 'edge_vertices_position2']
+        self.add_attribute('GeometryNodeInputMeshEdgeVertices',  meth_names,        'edge_vertices',   domain='EDGE')
         
+        self.add_attribute('GeometryNodeInputMeshFaceArea',      'face_area',        'face_area',       domain='FACE' )
+        
+        meth_names = ['face_neighbors_vertex_count', 'face_neighbors_face_count']
+        self.add_attribute('GeometryNodeInputMeshFaceNeighbors', meth_names,         'face_neighbors',  domain='FACE')
+        
+        self.add_attribute('GeometryNodeInputMeshIsland',        'island',           'island',          domain='POINT')
+        self.add_attribute('GeometryNodeInputShadeSmooth',       'shade_smooth',     'shade_smooth',    domain='FACE' )
+
+        meth_names = ['vertex_neighbors_vertex_count', 'vertex_neighbors_face_count']
+        self.add_attribute('GeometryNodeInputMeshVertexNeighbors', meth_names,       'vertex_neighbors', domain='POINT' )
+        
+        self.add_attribute('GeometryNodeInputMaterialIndex',     'material_index',     'material_index',     domain='FACE' )
+        self.add_attribute('GeometryNodeMaterialSelection',      'material_selection', 'material_selection', domain='FACE' )
         
         # ----------------------------------------------------------------------------------------------------
-        # Attributes
+        # Methods
 
         self.add_call('STACK', 'GeometryNodeSplitEdges',         'split_edges'          )
         self.add_call('STACK', 'GeometryNodeSubdivideMesh',      'subdivide'            )
@@ -795,7 +875,7 @@ class MeshGen(DataClass):
         
 class PointsGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Points', 'gn.Mesh')
+        super().__init__(nodes, 'Points', 'Geometry')
         
         self.add_call('STACK',  'GeometryNodeSetPointRadius',    'set_radius'          )
         
@@ -808,9 +888,9 @@ class PointsGen(DataClass):
         
 class InstancesGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Instances', 'gn.Mesh')
+        super().__init__(nodes, 'Instances', 'Geometry')
         
-        self.add_attribute('GeometryNodeInputIndex',      'index',     domains=['INSTANCE']  )
+        self.add_attribute('GeometryNodeInputIndex', 'instance_index', 'index', domain='INSTANCE')
         
         self.add_call('STACK', 'GeometryNodeRotateInstances',    'rotate'    )
         self.add_call('STACK', 'GeometryNodeScaleInstances',     'scale'     )
@@ -823,7 +903,7 @@ class InstancesGen(DataClass):
         
 class VolumeGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Volume', 'gn.Mesh')
+        super().__init__(nodes, 'Volume', 'Geometry')
         
         self.add_call('METHOD', 'GeometryNodeVolumeToMesh', 'to_mesh' , ret_class='Mesh')
         
@@ -832,14 +912,44 @@ class VolumeGen(DataClass):
 
 class SplineGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Spline', 'gn.Geometry')
+        super().__init__(nodes, 'Spline', 'Geometry')
         
-        self.add_attribute('GeometryNodeInputSplineCyclic',         'cyclic',       capture=True, domains=['CURVE']  , no_prefix='CURVE')
-        self.add_attribute('GeometryNodeInputSplineResolution',     'resolution',   capture=True, domains=['CURVE']  , no_prefix='CURVE')
-        self.add_attribute('GeometryNodeSplineLength',              'length',       capture=True, domains=['CURVE']  ,
-                           prop_names = ['length', 'point_count'])
-        self.add_attribute('GeometryNodeSplineParameter',           'parameter',    capture=True, domains=['CURVE']  ,
-                           prop_names = ['factor', 'parameter_length', 'parameter_index'])
+        # ----- Attributes captures
+        
+        self.add_attr_capture('GeometryNodeInputCurveHandlePositions',  'handle_positions',      default_domain='CURVE'  )
+        self.add_attr_capture('GeometryNodeInputTangent',               'tangent',               default_domain='CURVE'  )
+        self.add_attr_capture('GeometryNodeInputCurveTilt',             'tilt',                  default_domain='CURVE'  )
+        self.add_attr_capture('GeometryNodeCurveEndpointSelection',     'endpoint_selection',    default_domain='CURVE'  )
+        self.add_attr_capture('GeometryNodeCurveHandleTypeSelection',   'handle_type_selection', default_domain='CURVE'  )
+        self.add_attr_capture('GeometryNodeInputSplineCyclic',          'cyclic',                default_domain='CURVE'  )
+        self.add_attr_capture('GeometryNodeSplineLength',               'length',                default_domain='CURVE'  )
+        self.add_attr_capture('GeometryNodeSplineParameter',            'parameter',             default_domain='CURVE'  )
+        self.add_attr_capture('GeometryNodeInputSplineResolution',      'resolution',            default_domain='CURVE'  )
+        
+        # ----- Attributes
+        
+        self.add_attribute('GeometryNodeInputID',           'spline_ID',       'ID',               domain='SPLINE' )
+        self.add_attribute('GeometryNodeInputIndex',        'spline_index',    'index',            domain='SPLINE' )
+        self.add_attribute('GeometryNodeInputIndex',        'spline_position', 'position',         domain='SPLINE' )
+        
+        
+        meth_names = ['left_handle_position', 'right_handle_position']
+        self.add_attribute('GeometryNodeInputCurveHandlePositions',  meth_names,                'handle_positions',      domain='CURVE'  )
+
+        self.add_attribute('GeometryNodeInputTangent',               'tangent',                 'tangent',               domain='CURVE'  )
+        self.add_attribute('GeometryNodeInputCurveTilt',             'tilt',                    'tilt',                  domain='CURVE'  )
+        self.add_attribute('GeometryNodeCurveEndpointSelection',     'endpoint_selection',      'endpoint_selection',    domain='CURVE'  )
+        self.add_attribute('GeometryNodeCurveHandleTypeSelection',   'handle_type_selection',   'handle_type_selection', domain='CURVE'  )
+        self.add_attribute('GeometryNodeInputSplineCyclic',          'cyclic',                  'cyclic',                domain='CURVE'  )
+
+        meth_names = ['length', 'point_count']
+        self.add_attribute('GeometryNodeSplineLength',                meth_names,               'length',                domain='CURVE'  )
+
+        meth_names = ['factor', 'parameter_length', 'parameter_index']
+        self.add_attribute('GeometryNodeSplineParameter',            meth_names,                'parameter',             domain='CURVE'  )
+        self.add_attribute('GeometryNodeInputSplineResolution',      'resolution',              'resolution',            domain='CURVE'  )
+        
+        # ----- Methods
         
         self.add_call('STACK', 'GeometryNodeSetSplineCyclic',              'set_cyclic'     )
         self.add_call('STACK', 'GeometryNodeSetSplineResolution',          'set_resolution' )
@@ -850,7 +960,7 @@ class SplineGen(DataClass):
         
 class CurveGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Curve', 'gn.Spline')
+        super().__init__(nodes, 'Curve', 'Spline')
         
         self.add_call('CONSTRUCTOR', 'GeometryNodeCurvePrimitiveBezierSegment', 'BezierSegment'     )
         self.add_call('CONSTRUCTOR', 'GeometryNodeCurvePrimitiveCircle',        'Circle'            )
@@ -867,16 +977,16 @@ class CurveGen(DataClass):
         self.add_call('STATIC',      'GeometryNodeCurveArc',            'ArcFromPoints', mode = 'POINTS')
         
         
-        self.add_attribute('GeometryNodeInputID',           'ID',               domains={'SPLINE'})
-        self.add_attribute('GeometryNodeInputIndex',        'index',            domains={'SPLINE'})
+        #self.add_attribute('GeometryNodeInputID',           'ID',               domains={'SPLINE'})
+        #self.add_attribute('GeometryNodeInputIndex',        'index',            domains={'SPLINE'})
         
         
-        self.add_attribute('GeometryNodeCurveEndpointSelection',        'endpoint_selection',       capture=True, domains=['CURVE']  , no_prefix='CURVE')
-        self.add_attribute('GeometryNodeCurveHandleTypeSelection',      'handle_type_selection',    capture=True, domains=['CURVE']  , no_prefix='CURVE')
-        self.add_attribute('GeometryNodeInputCurveTilt',                'tilt',                     capture=True, domains=['CURVE']  , no_prefix='CURVE')
-        self.add_attribute('GeometryNodeInputRadius',                   'radius',                   capture=True, domains=['CURVE']  , no_prefix='CURVE')
-        self.add_attribute('GeometryNodeInputCurveHandlePositions',     'handle_positions',         capture=True, domains=['CURVE']  , 
-                           prop_names=('left_handle_position', 'right_handle_position'))
+        #self.add_attribute('GeometryNodeCurveEndpointSelection',        'endpoint_selection',       capture=True, domains=['CURVE']  , no_prefix='CURVE')
+        #self.add_attribute('GeometryNodeCurveHandleTypeSelection',      'handle_type_selection',    capture=True, domains=['CURVE']  , no_prefix='CURVE')
+        #self.add_attribute('GeometryNodeInputCurveTilt',                'tilt',                     capture=True, domains=['CURVE']  , no_prefix='CURVE')
+        #self.add_attribute('GeometryNodeInputRadius',                   'radius',                   capture=True, domains=['CURVE']  , no_prefix='CURVE')
+        #self.add_attribute('GeometryNodeInputCurveHandlePositions',     'handle_positions',         capture=True, domains=['CURVE']  , 
+        #                   prop_names=('left_handle_position', 'right_handle_position'))
         
         self.add_call('STACK', 'GeometryNodeCurveSetHandles',          'set_handles'              )
         self.add_call('STACK', 'GeometryNodeCurveSplineType',          'set_spline_type'          )
