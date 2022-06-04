@@ -226,6 +226,8 @@ logger = logging.getLogger('geonodes')
 logger.setLevel(logging.INFO)
 
 from generator import gen_sockets as gsock
+from generator import gen_doc as gd
+
 
 import importlib
 importlib.reload(gsock)
@@ -917,6 +919,7 @@ class WNode:
                 param.value = value
                 self.inputs.update_unames_indices(value)
                 self.outputs.update_unames_indices(value)
+                
 
     def __str__(self):
         return f"[{self.node_name}]"
@@ -1081,10 +1084,138 @@ class WNode:
         if s != "":
             yield s + "]"
             
+            
+    # ====================================================================================================
+    # Build the documentation
+    
+    def build_doc(self, wrap_parameters=True):
+        
+        args = self.get_node_arguments()
+        
+        # ----- Title and description
+                
+        self.doc = gd.Section(f"Class {self.node_name}", level=0)
+        self.doc.append(
+            gd.Description("Geometry node name:", gd.Italic(f"'{self.bnode.name}'"), gd.br, "Blender type: ", gd.Bold(self.bnode.bl_idname))
+            )
+        
+        # ----- Initialization
+        
+        section = self.doc.get_subsection("Initialization")
+        
+        python  = "from geonodes import nodes\n"
+        python += f"node = nodes.{self.node_name}("
+        s = args.sheader
+        python += s
+        if s != "":
+            python += ", "
+        python += "label=None)\n"
+        
+        section.append(gd.Python(python))
+        
+        section = section.get_subsection("Arguments")
+    
+        if self.inputs:
+            sect = section.get_subsection("Input sockets")
+            lst = gd.List()
+            sect.append(lst)
+            for uname, wsock in self.inputs.unames.items():
+                txt = gd.Text(gd.Bold(uname), ":")
+                if isinstance(wsock, list):
+                    txt.add(gd.Bold(self.driving_param), "dependant")
+                else:
+                    if wsock.is_multi_input:
+                        txt.add("*")
+                    txt.add(gd.Italic(wsock.class_name))
+                lst.add_item(txt)
+        
+        if self.parameters:
+            sect = section.get_subsection("Parameters")
+            lst = gd.List()
+            sect.append(lst)
+            
+            for name, param in self.parameters.items():
+                txt = gd.Text(gd.Bold(name), ":")
+                stype = param.param_type
+                if stype == 'str':
+                    txt.add(gd.Italic(f"'{param.default}'"))
+                else:
+                    txt.add(gd.Italic(str(param.default)))
+                
+                if param.is_enum:
+                    txt.add(f"in {param.values}")
+                else:
+                    txt.add(stype)
+                lst.add_item(txt)
+                    
+        sect = section.get_subsection("Node label")
+        lst = gd.List()
+        sect.append(lst)
+        lst.add_item(gd.Text(gd.Bold("label"), ": Geometry node label"))
+        
+        # ----- Data type dependant sockets
+                    
+        if self.has_shared_sockets:
+            
+            section = self.doc.get_subsection("Data type dependant sockets")
+            lst = gd.List()
+            section.append(lst)
+            lst.add_item(gd.Text("Driving parameter :", gd.Bold(self.driving_param), f"in {self.parameters[self.driving_param].values}"))
+            
+            inds = self.inputs.shared_sockets
+            if inds:
+                #lst.add_item(gd.Text(f"Input sockets : {list(inds.keys())}"))
+                lst.add_item(gd.Text("Input sockets :", *list(inds.keys())))
+                
+            inds = self.outputs.shared_sockets
+            if inds:
+                lst.add_item(gd.Text("Output sockets :", *list(inds.keys())))
+                #lst.add_item(gd.Text(f"Output sockets : {list(inds.keys())}"))
+
+        # ----- Output sockets
+    
+        if self.outputs:
+            
+            section = self.doc.get_subsection("Output sockets")
+            lst = gd.List()
+            section.append(lst)
+            
+            for uname, wsock in self.outputs.unames.items():
+                txt= gd.Text(gd.Bold(uname), ":")
+                if isinstance(wsock, list):
+                    txt.add(gd.Bold(self.driving_param), "dependant")
+                else:
+                    txt.add(gd.Italic(wsock.class_name))
+                    if wsock.is_multi_input:
+                        txt.add("(multi input)")
+
+                lst.add_item(txt)
+                
+        # ----- Data classes
+                
+        section = self.doc.get_subsection("Data sockets")
+        section.append(gd.Description("Data socket classes implementing this node"))
+        lst = gd.List()
+        section.append(lst)
+        section.dsockets = lst
+        
+        return self.doc
+            
+            
     # ====================================================================================================
     # Generate the node class md file
     
     def gen_md(self, wrap_parameters=True):
+        
+        doc = self.build_doc()
+        for line in doc.gen_md():
+            #print(line)
+            yield line + "\n"
+            
+        return
+        
+        
+        
         
         args = self.get_node_arguments()
         
@@ -1468,7 +1599,7 @@ class WNode:
         # Arguments
         
         args     = Arguments()
-        arg_self = False
+        #arg_self = False
         #arg_mult = False
 
         if family in ['CAPT_ATTR', 'ATTRIBUTE']:
@@ -1540,10 +1671,7 @@ class WNode:
             yield _1_ + "@property"
         
         elif family == 'ATTRIBUTE':
-            #if len(ret_unames) == 1 and not attribute['capture']:
-            if not attribute['capture']:
-                yield _1_ + "@property"
-                
+            yield _1_ + "@property"
 
         # ----- Other
         # def method(self, args,...):
@@ -1701,11 +1829,15 @@ class WNode:
                 yield _2_ +  "return getattr(self, attr_name)\n"
         
         elif family == 'ATTRIBUTE':
-            if len(ret_unames) == 1:
-                yield _2_ + f"return self.{attribute['capture_meth']}(domain='{attribute['domain']}')\n"
-            else:             
-                yield _2_ + f"return self.{attribute['capture_meth']}(domain='{attribute['domain']}').{list(ret_unames)[attribute['output_index']]}\n"
-                #yield _2_ + f"return self.{attribute['capture_meth']}(domain='{attribute['domain']}').output_sockets[{attribute['output_index']}]\n"
+            s =  _2_ + f"return self.{attribute['capture_meth']}(domain='{attribute['domain']}')"
+            if len(ret_unames) > 1:
+                s += f".{list(ret_unames)[attribute['output_index']]}"
+            yield s + "\n"
+            
+            #if len(ret_unames) == 1:
+            #    yield _2_ + f"return self.{attribute['capture_meth']}(domain='{attribute['domain']}')\n"
+            #else:             
+            #    yield _2_ + f"return self.{attribute['capture_meth']}(domain='{attribute['domain']}').{list(ret_unames)[attribute['output_index']]}\n"
     
                 
         # ----------------------------------------------------------------------------------------------------
