@@ -257,24 +257,6 @@ def indent_set(depth=0):
 
 _indent_, _0_, _1_, _2_, _3_, _4_ = indent_set(0)
 
-# ====================================================================================================
-# All nodes
-
-btree_nodes = bpy.data.node_groups["Geometry Nodes"].nodes
-btree_nodes.clear()
-
-class BNodes(dict):
-    def __init__(self):
-        super().__init__()
-        for tp in dir(bpy.types):
-            if tp.find('Legacy') < 0:
-                try:
-                    bnode = btree_nodes.new(tp)
-                except:
-                    continue
-                self[tp] = bnode
-                
-BNODES = BNodes()
 
 # ====================================================================================================
 # Call argument
@@ -383,6 +365,33 @@ class Argument:
         return isinstance(self.wsocket, list)
     
     @property
+    def scall_demo(self):
+        
+        if self.arg_type == 'CLS':
+            return ""
+        
+        elif self.arg_type == 'SOCKET':
+            if self.is_multi:
+                return f"{self.name}_1, {self.name}_2, {self.name}_3"
+            elif self.is_self:
+                return ""
+            else:
+                return self.name
+        
+        elif self.arg_type == 'PARAM':
+            if self.is_fixed:
+                return ""
+            else:
+                return self.name
+            
+        elif self.arg_type == 'OTHER':
+            return self.header_str
+        
+        else:
+            raise RuntimeError(f"Unkwnon argument type: {self.arg_type}")
+        
+    
+    @property
     def sheader(self):
         
         if self.arg_type == 'CLS':
@@ -446,10 +455,16 @@ class Argument:
     @property
     def scomment(self):
         
-        if self.arg_type in ['CLS', 'OTHER']:
+        if self.arg_type == 'CLS':
             return ""
         
-        s = f"{self.name:15s}: "
+        if self.arg_type == 'OTHER':
+            if self.header_str == "":
+                return ""
+            else:
+                return self.header_str.replace('=', ':')
+        
+        s = f"{self.name} : "
         if self.is_socket:
             if self.is_multi:
                 s += "*"
@@ -506,6 +521,19 @@ class Arguments(list):
         self.append(Argument('owner_socket', 'self',     is_fixed=True, quote_str_value = False))
         self.append(Argument('domain',        domain,    is_fixed=fixed_domain))
         self.append(Argument('data_type',     data_type, is_fixed=True))
+        
+        
+    @property
+    def scall_demo(self):
+        s = ""
+        for arg in self:
+            sh = arg.scall_demo
+            if sh != "":
+                s += f", {sh}"
+        if s != "":
+            return s[2:]
+        else:
+            return s
         
     @property
     def sheader(self):
@@ -569,8 +597,42 @@ class Arguments(list):
 
     # ---------------------------------------------------------------------------
     # Generate the comments in a node call
+    
+    def comment_section(self, section):
         
-    def gen_comment(self, _i_):
+        for arg in self:
+            
+            sect = None
+            if arg.arg_type == 'OTHER':
+                if arg.header_str == "":
+                    s = arg.call_str
+                    sect = section.get_subsection("Fixed parameters")
+                else:
+                    s = arg.header_str
+                    sect = section.get_subsection("Parameters arguments")
+                if s == "":
+                    continue
+                scomment = s.replace("=", ":")
+
+            else:
+                scomment = arg.scomment
+                if scomment == "":
+                    continue
+            
+            if arg.is_socket:
+                sect = section.get_subsection("Sockets arguments")
+
+            elif arg.is_param:
+                if arg.is_fixed:
+                    sect = section.get_subsection("Fixed parameters")
+                else:
+                    sect = section.get_subsection("Parameters arguments")
+                    
+            lst = sect.get_lists(align_char=':')[0]
+            lst.add_item(gd.Text(scomment))
+            
+        
+    def gen_comment_OLD(self, _i_):
         
         ok_sockets = True
         ok_params  = True
@@ -920,6 +982,10 @@ class WNode:
                 self.inputs.update_unames_indices(value)
                 self.outputs.update_unames_indices(value)
                 
+        # ----- Data sockets calling this node
+        
+        self.data_sockets = {}
+                
 
     def __str__(self):
         return f"[{self.node_name}]"
@@ -1099,6 +1165,9 @@ class WNode:
             gd.Description("Geometry node name:", gd.Italic(f"'{self.bnode.name}'"), gd.br, "Blender type: ", gd.Bold(self.bnode.bl_idname))
             )
         
+        self.doc.append(gd.Doc(gd.Link("Index", "/docs/index.md")))
+        
+        
         # ----- Initialization
         
         section = self.doc.get_subsection("Initialization")
@@ -1109,7 +1178,7 @@ class WNode:
         python += s
         if s != "":
             python += ", "
-        python += "label=None)\n"
+        python += "label=None)"
         
         section.append(gd.Python(python))
         
@@ -1117,7 +1186,7 @@ class WNode:
     
         if self.inputs:
             sect = section.get_subsection("Input sockets")
-            lst = gd.List()
+            lst = gd.List(align_char=':')
             sect.append(lst)
             for uname, wsock in self.inputs.unames.items():
                 txt = gd.Text(gd.Bold(uname), ":")
@@ -1131,7 +1200,7 @@ class WNode:
         
         if self.parameters:
             sect = section.get_subsection("Parameters")
-            lst = gd.List()
+            lst = gd.List(align_char=':')
             sect.append(lst)
             
             for name, param in self.parameters.items():
@@ -1149,7 +1218,7 @@ class WNode:
                 lst.add_item(txt)
                     
         sect = section.get_subsection("Node label")
-        lst = gd.List()
+        lst = gd.List(align_char=':')
         sect.append(lst)
         lst.add_item(gd.Text(gd.Bold("label"), ": Geometry node label"))
         
@@ -1158,7 +1227,7 @@ class WNode:
         if self.has_shared_sockets:
             
             section = self.doc.get_subsection("Data type dependant sockets")
-            lst = gd.List()
+            lst = gd.List(align_char=':')
             section.append(lst)
             lst.add_item(gd.Text("Driving parameter :", gd.Bold(self.driving_param), f"in {self.parameters[self.driving_param].values}"))
             
@@ -1177,7 +1246,7 @@ class WNode:
         if self.outputs:
             
             section = self.doc.get_subsection("Output sockets")
-            lst = gd.List()
+            lst = gd.List(align_char=':')
             section.append(lst)
             
             for uname, wsock in self.outputs.unames.items():
@@ -1192,108 +1261,26 @@ class WNode:
                 lst.add_item(txt)
                 
         # ----- Data classes
-                
-        section = self.doc.get_subsection("Data sockets")
-        section.append(gd.Description("Data socket classes implementing this node"))
-        lst = gd.List()
-        section.append(lst)
-        section.dsockets = lst
+        
+        if self.data_sockets:
+            
+            section = self.doc.get_subsection("Data sockets")
+            section.append(gd.Description("Data socket classes implementing this node"))
+            lst = gd.List(align_char=':')
+            section.append(lst)
+            
+            classes = list(self.data_sockets.keys())
+            classes.sort()
+            for class_name in classes:
+                refs = list(self.data_sockets[class_name])
+                refs.sort()
+                for meth_name, family in refs:
+                    lst.add_item(gd.Text(
+                        gd.Link(class_name, f"../sockets/{class_name}.md"),
+                        gd.Link(meth_name, f"../sockets/{class_name}.md#{gd.Section.title_tag(meth_name)}"),
+                        f": {family}"))
         
         return self.doc
-            
-            
-    # ====================================================================================================
-    # Generate the node class md file
-    
-    def gen_md(self, wrap_parameters=True):
-        
-        doc = self.build_doc()
-        for line in doc.gen_md():
-            #print(line)
-            yield line + "\n"
-            
-        return
-        
-        
-        
-        
-        args = self.get_node_arguments()
-        
-        # ---------------------------------------------------------------------------
-        # Class comment
-    
-        yield f"# {self.node_name}"
-        yield  "\n\n"
-        yield f"\n> Geometry node: ***{self.bl_idname}***\n"
-        
-        yield  "\n## Initialization\n"
-        yield  "\n```python"
-        yield f"\n{self.node_name}("
-
-        s = args.sheader
-        if s != "":
-            yield s + ", "
-        yield "label=None)\n"
-        yield  "\n```"
-        
-        yield "\n## Arguments"
-    
-        if self.inputs:
-            yield "\n### Input sockets"
-            for uname, wsock in self.inputs.unames.items():
-                yield f"\n  - **{uname}** : "
-                if isinstance(wsock, list):
-                    yield f"**{self.driving_param}** dependant"
-                else:
-                    if wsock.is_multi_input:
-                        yield "*"
-                    yield f"_{wsock.class_name}_"
-        
-        if self.parameters:
-            yield "\n### Parameters"
-            for name, param in self.parameters.items():
-                yield f"\n  - **{name}** : "
-                #stype = type(param.default).__name__
-                stype = param.param_type
-                sdef = f"'{param.default}'" if stype == 'str' else f"_{param.default}_"
-                yield sdef
-                
-                if param.is_enum:
-                    yield f" in {param.values}"
-                else:
-                    yield " " + stype
-
-        yield "\n### Node label"
-        yield "\n  - **label** : Geometry node label"
-                    
-                    
-        if self.has_shared_sockets:
-            yield  "\n## Data type dependant sockets"
-            yield f"\n  - Driving parameter : **{self.driving_param}** in {self.parameters[self.driving_param].values}\n"
-            
-            inds = self.inputs.shared_sockets
-            if inds:
-                yield f"\n  - Input sockets : {list(inds.keys())}"
-            inds = self.outputs.shared_sockets
-            if inds:
-                yield f"\n  - Output sockets : {list(inds.keys())}"
-    
-        if self.outputs:
-            yield "\n## Output sockets"
-            for uname, wsock in self.outputs.unames.items():
-                yield f"\n  - **{uname}** : "
-                if isinstance(wsock, list):
-                    yield f"**{self.driving_param}** dependant"
-                else:
-                    yield f"_{wsock.class_name}_"
-                    if wsock.is_multi_input:
-                        yield " (multi input)"
-                        
-        yield "\n## Data sockets"
-        yield "\nData socket classes implementing this node"
-                        
-        yield "\n"
-        
             
     
     # ====================================================================================================
@@ -1312,68 +1299,16 @@ class WNode:
     
         # ---------------------------------------------------------------------------
         # Class comment
-    
-        yield _1_ + '"""' + f"Node '{self.bnode.name}' ({self.bl_idname})\n"
-    
-        if self.has_shared_sockets:
-            yield _1_ + "Data type dependant sockets"
-            yield _1_ + "---------------------------\n"
-            yield _2_ + f"Driving parameter : {self.driving_param} in {self.parameters[self.driving_param].values}\n"
-            inds = self.inputs.shared_sockets
-            if inds:
-                yield _2_ + f"Input sockets     : {list(inds.keys())}"
-            inds = self.outputs.shared_sockets
-            if inds:
-                yield _2_ + f"Output sockets    : {list(inds.keys())}"
-            yield _0_
         
-        if self.inputs:
-            yield _1_ + "Input sockets"
-            yield _1_ + "-------------"
-            for uname, wsock in self.inputs.unames.items():
-                yield _2_ + f"{uname:15s} : "
-                if isinstance(wsock, list):
-                    yield f"{self.driving_param} dependant"
-                else:
-                    if wsock.is_multi_input:
-                        yield "*"
-                    yield wsock.class_name
-                    
-            yield _0_
-        
-        if self.parameters:
-            yield _1_ + "Parameters"
-            yield _1_ + "----------"
-            for name, param in self.parameters.items():
-                yield _2_ + f"{name:15s} : "
-                #stype = type(param.default).__name__
-                stype = param.param_type
-                sdef = f"'{param.default}'" if stype == 'str' else f"({param.default})"
-                yield sdef
+        doc = self.build_doc()
+        first = True
+        for line in doc.gen_text(width=100):
+            if first:
+                yield _1_ + '"""' + line
+                first = False
+            else:
+                yield _1_ + line
                 
-                if param.is_enum:
-                    yield " in "
-                    indent = ""
-                    for line in self.format_list(param.values, 100):
-                        yield indent + line
-                        indent = _2_ + _indent_*5
-                else:
-                    yield " " + stype
-            yield _0_
-            
-    
-        if self.outputs:
-            yield _1_ + "Output sockets"
-            yield _1_ + "--------------"
-            for uname, wsock in self.outputs.unames.items():
-                yield _2_ + f"{uname:15s} : "
-                if isinstance(wsock, list):
-                    yield f"{self.driving_param} dependant"
-                else:
-                    yield wsock.class_name
-                    if wsock.is_multi_input:
-                        yield " (multi input)"
-    
         yield _1_ + '"""' + "\n"
     
         # ---------------------------------------------------------------------------
@@ -1547,392 +1482,59 @@ class WNode:
                 yield _1_ + f"@{param.uname}.setter"
                 yield _1_ + f"def {param.uname}(self, value):"
                 yield _2_ + f"self.bnode.{name} = value\n"
-    
-    
-    # ====================================================================================================
-    # Generate a call
-    
-    def gen_call(self, family, class_name, meth_name, self_name=None, settable=False, properties=None, attribute={}, **fixed):
-        
-        #print("GEN_CALL:", self.node_name, family, class_name, meth_name, self_name)
-        #print()
-        
-        _indent_, _0_, _1_, _2_, _3_, _4_ = indent_set(-1 if family == 'FUNCTION' else 0)
 
-        # ---------------------------------------------------------------------------
-        # Configure the node to steer the enablement
-
-        self.set_params(fixed)
-        
-        # ---------------------------------------------------------------------------
-        # Dictionary : {uname : class_name}
-        # of the input / ouput sockets in this configuration
-        
-        inp_unames = self.input_unames(fixed)
-        ret_unames = self.output_unames(fixed)
-        
-        # ---------------------------------------------------------------------------
-        # If self_name is None, use the first enabled input socket of the proper class
-
-        if family in ['FUNCTION', 'STATIC', 'CLASS', 'CONSTRUCTOR', 'ATTRIBUTE', 'CAPT_ATTR']:
-            if self_name is not None:
-                raise RuntimeError(f"The method {meth_name} on node {self.node_name} is {family}: it can have a self argument: {self_name}.")
-                
-        elif self_name is None and self.inputs:
-            geo_socket = None
-            for wsock in self.inputs:
-                #print(class_name, wsock.uname, wsock.class_name, wsock.enabled)
-                if wsock.enabled:
-                    if wsock.class_name == class_name:
-                        self_name = wsock.uname
-                        break
-                    if wsock.class_name == 'Geometry' and geo_socket is None:
-                        geo_socket = wsock.class_name
-                    
-            if self_name is None:
-                if class_name in ['Mesh', 'Points', 'Instances', 'Volume', 'Curve', 'Spline'] and geo_socket is not None:
-                    self_name = geo_socket
-                else:
-                    raise RuntimeError(f"The method {meth_name} on node {self.node_name} is {family}: it requires a self argument for class {class_name}.")
-                
-        # ---------------------------------------------------------------------------
-        # Arguments
-        
-        args     = Arguments()
-        #arg_self = False
-        #arg_mult = False
-
-        if family in ['CAPT_ATTR', 'ATTRIBUTE']:
-            args.add(Argument.Other(header_str="self", call_str=""))
-            #arg_self = True
-            
-        #for uname, wsocks in self.inputs.unames.items():
-        for uname in inp_unames:
-            wsocks = self.inputs.unames[uname]
-            
-            wsock = None
-            if isinstance(wsocks, list):
-                for ws in wsocks:
-                    if ws.enabled:
-                        wsock = ws
-                        break
-            else:
-                wsock = wsocks
-                
-            if wsock is None:
-                continue
-                
-            is_self  = uname == self_name
-            args.add(Argument.Socket(uname, wsocket=wsock, is_self=is_self))
-            
-        for name, param in self.parameters.items():
-            is_fixed = name in fixed
-            value = fixed[name] if is_fixed else param.default
-            args.append(Argument.Param(name, value, param=param, is_fixed=is_fixed))
-            
-        if family == 'PROPERTY':
-            args.add(Argument.Other(header_str="", call_str="label=f\"{self.node_chain_label}." + meth_name + "\""))
-
-        if family == 'CAPT_ATTR':
-            args.add(Argument.Other(header_str=f"domain='{attribute['domain']}'"))
-
-        # ----- Ensure the socket arguments are properly ordered
-        
-        args.check_order(self.bl_idname)
-            
-        # ----------------------------------------------------------------------------------------------------
-        # Function header
-        #
-        # @decorator
-        # def method(self, args...):
-        
-        # ----- Static method
-        # @staticmethod
-        # def method(args,...):
-        
-        is_cls = False
-        if family in 'STATIC':
-            yield _1_ + "@staticmethod"
-
-        # ----- Class method
-        # @classmethod
-        # def method(cls, args,...):
-
-        elif family in ['CLASS', 'CONSTRUCTOR']:
-            yield _1_ + "@classmethod"
-            args.add(Argument.Cls())
-            is_cls = True
-
-        # ----- Property
-        # @property
-        # def method(self, args,...):
-
-        elif family == 'PROPERTY':
-            yield _1_ + "@property"
-        
-        elif family == 'ATTRIBUTE':
-            yield _1_ + "@property"
-
-        # ----- Other
-        # def method(self, args,...):
-        
-        yield _1_ + f"def {meth_name}({args.sheader}):"
-        
-        # ----------------------------------------------------------------------------------------------------
-        # Comment
-        
-        yield _2_ + '"""' + f"Call node {self.node_name} ({self.bl_idname})"
-        for line in args.gen_comment(_2_):
-            yield line
-    
-        yield _0_
-        yield _2_ + "Returns"
-        yield _2_ + "-------"
-        
-        if family == 'STACK':
-            yield _3_ + "self\n"
-        
-        elif family == 'ATTRIBUTE':
-            yield _3_ + ret_unames[list(ret_unames)[attribute['output_index']]]
-
-        else:
-            if len(ret_unames) == 0:
-                yield _3_ + "self\n"
-
-            elif len(ret_unames) == 1:
-                yield _3_ + ret_unames[list(ret_unames)[0]]
-            
-            else:
-                yield _3_ + "Sockets ["
-                sep = ""
-                for uname in ret_unames:
-                    yield f"{sep}{uname} ({ret_unames[uname]})"
-                    sep = ", "
-                yield "]"
-        
-        yield _2_ + '"""' + "\n"
-    
-        # ----------------------------------------------------------------------------------------------------
-        # Node call string
-        
-        snode_call = f"nodes.{self.node_name}({args.scall})"
-            
-        # ----------------------------------------------------------------------------------------------------
-        # ----- Call and return
-
-        # ----------------------------------------------------------------------------------------------------
-        # STACK: call the stack with the node
-        #
-        # def method(self, ...):
-        #     return self.stack(node(...))
-    
-        if family == 'STACK':
-            yield _2_ + f"return self.stack({snode_call})\n"
-    
-        # ----------------------------------------------------------------------------------------------------
-        # PROPERTY: create a local attribute plus create children properties
-        # if the resulting node has several sockets:
-        #
-        # @property
-        # def length(self):
-        #     if self.length_ is None:
-        #         self.length_ = Node(...).length
-        #     return self.length_
-        #
-        # or
-        #
-        # @property
-        # def components(self):
-        #     if self.components is None:
-        #         self.components_ = Node(...)
-        #     return self.components_
-        #
-        # @property
-        # def mesh_component(self):
-        #     return self.components.mesh
-        #
-        # @property
-        # def curve_component(self):
-        #     return self.components.curve
-    
-        elif family == 'PROPERTY':
-            
-            settable   = properties['settable']
-            prop_names = properties['names']
-            
-            if len(ret_unames) == 0:
-                raise RuntimeError(f"Impossible to implement a property on {self.node_name} with not output sockets!")
-                
-            yield _2_ + f"if self.{meth_name}_ is None:"
-            yield _3_ + f"self.{meth_name}_ = {snode_call}"
-        
-            if len(ret_unames) == 1:
-                yield f".{list(ret_unames)[0]}"
-            yield _2_ + f"return self.{meth_name}_\n"
-        
-            if len(ret_unames) > 1:
-                yield "\n"
-                if prop_names is None:
-                    prop_names = ret_unames
-                for uname, pname in zip(ret_unames, prop_names):
-                    yield _1_ + "@property"
-                    yield _1_ + f"def {pname}(self):"
-                    yield _2_ + f"return self.{meth_name}.{uname}\n"
-            
-                    if settable:
-                        yield _1_ +f"@{pname}.setter"
-                        yield _1_ + f"def {pname}(self, value):"
-                        yield _2_ + f"self.{meth_name}.{uname} = value\n"
-                    
-        # ----------------------------------------------------------------------------------------------------
-        # ATTRIBUTE: the attribute dictionary contains:
-        # - capture      : False or True if if is the implementation of the captur_attr method
-        # - capture_meth : Name of the capture_attr method (when capture is False) 
-        # - domain       : The attribute domain
-        # - output_index : The index of the output socket
-        #
-        # Implementation depends upon the capture value
-        # True:  The capture method with domain argument to cover all the possible domains
-        # False: Property with a specific domain
-        #
-        # ----- capture = True:
-        # 
-        # def capture_attr(self, domain='POINT'):
-        #      node = nodes.NodeAttr()
-        #      node.as_atribute(owning_socket=self, domain=domain)
-        #      return node.socket # When only one output socket
-        #      return node        # When several output sockets
-        #
-        # ----- capture = False
-        #
-        # @property
-        # def point_attr(self, domain='POINT'):
-        #      return self.capture_attr(domain=domain)
-        #
-        # If the attribute has several output sockets (GeometryNodeInputMeshIsland returns island_vertex and island_count),
-        # each output socket is implemented. The names are provided in prop_names which is mandatory
-        #
-        # @property
-        # def point_attr_socket(self):
-        #      return self.capture(domain='POINT').output_sockets[output_index]
-
-        elif family == 'CAPT_ATTR':
-            yield _2_ + f"attr_name = '{meth_name}_' + domain" 
-            yield _2_ +  "if not hasattr(self, attr_name):"
-            yield _3_ + f"node = {snode_call}"
-            yield _3_ +  "node.as_attribute(owning_socket=self, domain=domain)"
-            yield _3_ +  "setattr(self, attr_name, node)"
-        
-            if len(ret_unames) == 1:
-                yield _2_ + f"return getattr(self, attr_name).{list(ret_unames)[0]}\n"
-            else:
-                yield _2_ +  "return getattr(self, attr_name)\n"
-        
-        elif family == 'ATTRIBUTE':
-            s =  _2_ + f"return self.{attribute['capture_meth']}(domain='{attribute['domain']}')"
-            if len(ret_unames) > 1:
-                s += f".{list(ret_unames)[attribute['output_index']]}"
-            yield s + "\n"
-            
-            #if len(ret_unames) == 1:
-            #    yield _2_ + f"return self.{attribute['capture_meth']}(domain='{attribute['domain']}')\n"
-            #else:             
-            #    yield _2_ + f"return self.{attribute['capture_meth']}(domain='{attribute['domain']}').{list(ret_unames)[attribute['output_index']]}\n"
-    
-                
-        # ----------------------------------------------------------------------------------------------------
-        # Other : can return 3 things depending on the number of output sockets in ret_unames
-        #
-        # 0. no socket   : return None
-        # 1. 1 socket    : return the socket
-        # 2: > 1 sockets : return the node
-        #
-        # def method(self,...):
-        #     Node(...)
-        #
-        # def method(self,...):
-        #     return Node(...).mesh
-        #
-        # def method(self,...):
-        #     return Node(...)
-    
-        else:
-            if len(ret_unames) == 0:
-                yield _2_ + f"{snode_call}\n"
-            
-            elif len(ret_unames) == 1:
-                if is_cls:
-                    yield _2_ + f"return cls({snode_call}.{list(ret_unames)[0]})\n"
-                else:
-                    yield _2_ + f"return {snode_call}.{list(ret_unames)[0]}\n"
-            
-            else:
-                yield _2_ + f"return {snode_call}\n"
-        
         
 # ====================================================================================================
 # Generate the nodes module
 
-def create_nodes_module(fpath):
-    
-    fname = fpath + "nodes/nodes.py"
-    
-    with open(fname, 'w') as f:
-        f.write("from geonodes.core.node import Node\n")
-        
-        for bnode in BNODES.values():
-            wn = WNode(bnode)
-            
-            """
-            if wn.has_shared_sockets:
-                sblid = f"'{wn.bl_idname}'"
-                print(f"    {sblid:32s} : '{wn.function_name}', # {wn.parameters[wn.driving_param].values}")
-                dprm = wn.parameters[wn.driving_param]
-                for value in dprm.values:
-                    print('---', value)
-                    dprm.value = value
-                    prms = wn.non_driving_params()
-                    for n, p in prms.items():
-                        if p.is_enum:
-                            print(f"   {n:15s} : {p.values}")
-                    print()
-                print()
-            """
-            
-            if wn.bl_idname in ['NodeReroute', 'NodeGroupInput', 'NodeGroupOutput', 'GeometryNodeViewer', 'NodeFrame']:
-                logger.info(f"Ignore: {wn.bl_idname}")
-                continue
-            
-            f.write(f"\n# {'-'*100}\n")
-            f.write(f"# Node {wn.node_name} for {wn.bl_idname}\n")
+# ----------------------------------------------------------------------------------------------------
+# Create all the nodes
 
-            for line in wn.gen_node_class():
-                f.write(line)
+btree_nodes = bpy.data.node_groups["Geometry Nodes"].nodes
+btree_nodes.clear()
+
+class BNodes(dict):
+    def __init__(self):
+        super().__init__()
+        for tp in dir(bpy.types):
+            if tp.find('Legacy') < 0:
+                try:
+                    bnode = btree_nodes.new(tp)
+                except:
+                    continue
+                self[tp] = bnode
                 
-            # ----- md file
-            
-            fmd = fpath + f"docs/nodes/{wn.node_name}.md"
-            with open(fmd, 'w') as fd:
-                for line in wn.gen_md():
-                    fd.write(line)
-                    
-                    
+# ----- Create the geometry nodes
                 
-def gen_geonodes(fpath=None):
+BNODES = BNodes()
 
-    #fpath = "/Users/alain/Documents/blender/scripts/modules/geonodes/"
+# ----- Create the wrapping nodes
+
+for bnode in BNODES.values():
+    WNode(bnode)
+
+# ----- The generated nodes and sockets
+
+generated_nodes   = []
+generated_sockets = []
+
+
+# ----------------------------------------------------------------------------------------------------
+# Generate the classes
+# 
+# When a classes is created, it update the nodes it uses
+                
+def create_data_sockets(fpath):
     
-    # ----- nodes.py
-
-    create_nodes_module(fpath)
-    #create_nodes_module("/Users/alain/Documents/blender/scripts/modules/geonodes/nodes/nodes.py")
-
     # ----- sockets files
 
     gsock.GEN_NODES = []
     class_gens = []
     
     nodes_md = {}
+    
+    # ---------------------------------------------------------------------------
+    # Loop on the data sockets generators
 
     for i, dgen in enumerate(gsock.DATA_CLASSES):
         
@@ -1946,47 +1548,117 @@ def gen_geonodes(fpath=None):
                 
             f.write("\n\n")
             
-        class_gen.feed_nodes_md(nodes_md)
+        class_gen.register_nodes()
         
-    # ----- Complement the nodes doc with the reference of the classes
+        # ----------------------------------------------------------------------------------------------------
+        # Markdown version of the class documentation
+        
+        fmd = fpath + f"docs/sockets/{class_gen.class_name}.md"
+        with open(fmd, 'w') as fd:
+            
+            doc = class_gen.doc
+            for line in doc.gen_md():
+                fd.write(line + "\n")
+        
+            doc = class_gen.methods_documentation()
+            for line in doc.gen_md():
+                fd.write(line + "\n")
+
+        # ----- For further indexing
+                
+        generated_sockets.append(class_gen.class_name)
+
+
+# ----------------------------------------------------------------------------------------------------
+# Creat all the nodes in 
+
+def create_nodes(fpath):
     
-    for node_name, refs in nodes_md.items():
-        fname = fpath + f"docs/nodes/{node_name}.md"
-        with open(fname, 'a') as f:
-            for family, meths in refs.items():
-                f.write(f"\n### {family}")
-                for meth in meths:
-                    f.write(f"\n  - {meth}")
+    fname = fpath + "nodes/nodes.py"
+    
+    with open(fname, 'w') as f:
+        f.write("from geonodes.core.node import Node\n")
+        
+        for bnode in BNODES.values():
+            
+            # ----------------------------------------------------------------------------------------------------
+            # Load the node
+            
+            #wn = WNode(bnode)
+            wn = WNode.WNODES[bnode.bl_idname]
+            
+            # ----- Some exclusion
+            
+            if wn.bl_idname in ['NodeReroute', 'NodeGroupInput', 'NodeGroupOutput', 'GeometryNodeViewer', 'NodeFrame']:
+                logger.info(f"Ignore: {wn.bl_idname}")
+                continue
+            
+            # ----- Write the node
+            
+            f.write(f"\n# {'-'*100}\n")
+            f.write(f"# Node {wn.node_name} for {wn.bl_idname}\n")
+
+            for line in wn.gen_node_class():
+                f.write(line)
+                
+            # ----------------------------------------------------------------------------------------------------
+            # Markdown version of the class documentation
+            
+            fmd = fpath + f"docs/nodes/{wn.node_name}.md"
+            with open(fmd, 'w') as fd:
+                doc = wn.doc
+                for line in doc.gen_md():
+                    fd.write(line + "\n")
                     
+            # ----- For further indexing
+                    
+            generated_nodes.append(wn.node_name)
+
+                    
+                    
+                    
+# ====================================================================================================
+# Generate the nodes module
                 
-            
-            
+def create_geonodes(fpath):
+
+    # ---------------------------------------------------------------------------
+    # data sockets classes
+    
+    create_data_sockets(fpath)
+
+    # ---------------------------------------------------------------------------
+    # nodes.py
+
+    create_nodes(fpath)
+    
+    # ---------------------------------------------------------------------------
+    #Index
+    
+    doc = gd.Section("Index", level=0)
+
+    section = doc.get_subsection("Data sockets")
+    
+    lst = gd.List()
+    for class_name in generated_sockets:
+        lst.add_item(gd.Text(gd.Link(class_name, f"sockets/{class_name}.md")))
+
+    section.append(lst)
         
-            
-                
-                
-"""                    
-            
-
-create_nodes_module("/Users/alain/Documents/blender/scripts/modules/geonodes/nodes/nodes.py")
-
-gsock.GEN_NODES = []
-
-for i, dgen in enumerate(gsock.DATA_CLASSES):
     
-    class_gen = dgen(WNode.WNODES)
-    
-    fpath = "/Users/alain/Documents/blender/scripts/modules/geonodes/sockets/"
-    
-    #with open(get_folder("sockets").joinpath(f"{class_gen.class_name.lower()}.py"), 'w') as f:
-    with open(fpath + f"{class_gen.class_name.lower()}.py", 'w') as f:
+    section = doc.get_subsection("Nodes")
 
-        for line in class_gen.gen_class():
-            f.write(line)
-            
-        f.write("\n\n")
-        
-"""
-            
+    lst = gd.List()
+    for node_name in generated_nodes:
+        lst.add_item(gd.Text(gd.Link(node_name, f"nodes/{node_name}.md")))
+
+    section.append(lst)
+    
+    
+    fname = fpath + f"docs/index.md"
+    with open(fname, 'w') as f:
+        for line in doc.gen_md():
+            f.write(line + "\n")
+    
 
     

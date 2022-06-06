@@ -29,7 +29,6 @@ FAMILIES = {
     'CAPT_ATTR'   : ('Capture attribute','Attribute capture'     , True ),
     'ATTRIBUTE'   : ('Attribute',        'Attributes'            , True ),
     'METHOD'      : ('Method',           'Methods'               , True ),        
-    'STACK'       : ('Stacked method',   'Stacked methods'       , True ),
     
     'FUNCTION'    : ('Function',         'Functions'             , False),
     }
@@ -156,34 +155,38 @@ DATA_TYPES = {
 
 class NodeCall:
     
-    def __init__(self, family, wnode, class_name, meth_name, self_name=None, out_name=None, ret_class=None, args_hooks={}, **fixed):
+    def __init__(self, family, wnode, class_name, meth_name, self_name=None, out_name=None, ret_class=None, stack=False, **fixed):
         
         self.family     = family
 
         self.wnode      = wnode
         self.class_name = class_name
         self.meth_name  = meth_name
+        self.stack      = stack
         
         self.self_name  = self_name
         self.out_name   = out_name
         self.ret_class  = ret_class
-        self.hooks      = args_hooks
 
         self.fixed      = dict(fixed)
-        
-        self.properties = None
-        self.attribute  = {}
 
     # ----------------------------------------------------------------------------------------------------
     # A property
     
     @classmethod
-    def Property(cls, wnode, class_name, meth_name, settable=False, prop_names=None, **fixed):
+    def Property(cls, wnode, class_name, meth_name, settable=False, main_prop_name=None, output_index = 0, **fixed):
         nc = cls('PROPERTY', wnode, class_name, meth_name, **fixed)
-        nc.properties = {
-            'settable' : settable,
-            'names'    : prop_names,
-            }
+        
+        if main_prop_name is None:
+            nc.is_main_prop   = True
+            nc.main_prop_name = meth_name
+        else:
+            nc.is_main_prop   = False
+            nc.main_prop_name = main_prop_name
+            
+        nc.prop_is_settable = settable
+        nc.output_index     = output_index
+
         return nc
     
     # ----------------------------------------------------------------------------------------------------
@@ -193,10 +196,8 @@ class NodeCall:
     def AttributeCapture(cls, wnode, class_name, attr_name, default_domain='POINT'):
         
         nc = cls('CAPT_ATTR', wnode, class_name, f"capture_{attr_name}")
-
-        nc.attribute = {
-            'domain' : default_domain,
-        }
+        
+        nc.domain = default_domain
         
         return nc
     
@@ -208,32 +209,11 @@ class NodeCall:
         
         nc = cls('ATTRIBUTE', wnode, class_name, meth_name)
         
-        nc.attribute = {
-            'capture_meth' : f"capture_{attr_name}",
-            'domain'       : domain,
-            'output_index' : output_index,
-        }
+        nc.capture_meth = f"capture_{attr_name}"
+        nc.domain       = domain
+        nc.output_index = output_index
         
         return nc    
-
-    # ----------------------------------------------------------------------------------------------------
-    # An attribute
-    
-    @classmethod
-    def Attribute_OLD(cls, wnode, class_name, meth_name, capture_meth=None, domain='POINT', output_index=0):
-        
-        capture = capture_meth is None
-
-        nc = cls('CAPT_ATTR' if capture else 'ATTRIBUTE', wnode, class_name, meth_name)
-
-        nc.attribute = {
-            'capture'      : capture,
-            'capture_meth' : capture_meth,
-            'domain'       : domain,
-            'output_index' : output_index,
-            }
-        
-        return nc
 
     # ----------------------------------------------------------------------------------------------------
     # The call is a method using self
@@ -250,14 +230,10 @@ class NodeCall:
         
         unames = self.wnode.output_unames(self.fixed)
         
-        if self.family == 'STACK':
-            ret_str = self.class_name
+        if self.family == 'ATTRIBUTE':
             
-        elif self.family == 'ATTRIBUTE':
-            
-            index = self.attribute['output_index']
-            
-            ret_str = f"{unames[list(unames)[index]]:9s} = {self.attribute['capture_meth']}(domain='{self.attribute['domain']}')"
+            index = self.output_index
+            ret_str = f"{unames[list(unames)[index]]} = {self.capture_meth}(domain='{self.domain}')"
             if len(unames) > 1:
                 ret_str += f".{list(unames)[index]}"
             
@@ -266,17 +242,398 @@ class NodeCall:
             
         elif len(unames) == 1:
             uname = list(unames)[0]
-            ret_str = f"{uname:12s} ({unames[uname]})"
+            ret_str = f"{uname} ({unames[uname]})"
+            
+        elif len(unames) == 2 and self.stack:
+            uname = list(unames)[1]
+            ret_str = f"{uname} ({unames[uname]})"
             
         else:
-            ret_str = "Sockets      ["
-            sep = ""
-            for uname, class_name in unames.items():
-                ret_str += f"{sep}{uname} ({class_name})"
-                sep = ", "
-            ret_str += "]"
+            if self.family == 'PROPERTY' and not self.is_main_prop:
+                uname = list(unames.keys())[self.output_index]
+                ret_str = f"{uname} ({unames[uname]}) = {self.main_prop_name}.{uname}"
+                
+            else:
+                ret_str = "Sockets      ["
+                sep = ""
+                for uname, class_name in unames.items():
+                    ret_str += f"{sep}{uname} ({class_name})"
+                    sep = ", "
+                ret_str += "]"
+                
+        node_link = gd.Link(self.wnode.node_name, f"../nodes/{self.wnode.node_name}.md")
         
-        return f"{self.meth_name:25s} : {ret_str}"
+        return gd.Text(gd.Link(f"**{self.meth_name}**", f"#{gd.Section.title_tag(self.meth_name)}"), ":", node_link, ret_str)
+    
+    
+    # ====================================================================================================
+    # Generate a call
+    #
+    # data_class is passed as an argument to collect to documentation
+    
+    def gen_call(self, data_class):
+        
+        from generator.generator import Argument, Arguments
+        
+        _indent_, _0_, _1_, _2_, _3_, _4_ = indent_set(-1 if self.family == 'FUNCTION' else 0)
+        
+        # ---------------------------------------------------------------------------
+        # To ease the reading
+        
+        family      = self.family
+        class_name  = self.class_name
+        meth_name   = self.meth_name
+        self_name   = self.self_name
+        fixed       = self.fixed
+
+        # ---------------------------------------------------------------------------
+        # Configure the node to steer the enablement
+
+        self.wnode.set_params(fixed)
+        
+        # ---------------------------------------------------------------------------
+        # Dictionary : {uname : class_name}
+        # of the input / ouput sockets in this configuration
+        
+        inp_unames = self.wnode.input_unames(fixed)
+        ret_unames = self.wnode.output_unames(fixed)
+        
+        # ---------------------------------------------------------------------------
+        # If self_name is None, use the first enabled input socket of the proper class
+
+        if family in ['FUNCTION', 'STATIC', 'CLASS', 'CONSTRUCTOR', 'ATTRIBUTE', 'CAPT_ATTR']:
+            if self_name is not None:
+                raise RuntimeError(f"The method {meth_name} on node {self.node_name} is {family}: it can have a self argument: {self_name}.")
+                
+        elif self_name is None and self.wnode.inputs:
+            geo_socket = None
+            for wsock in self.wnode.inputs:
+                if wsock.enabled:
+
+                    if wsock.class_name == class_name:
+                        self_name = wsock.uname
+                        break
+                    
+                    if wsock.class_name == 'Geometry' and geo_socket is None:
+                        geo_socket = wsock.uname
+                        #geo_socket = wsock.class_name
+                    
+            if self_name is None:
+                if class_name in ['Mesh', 'Points', 'Instances', 'Volume', 'Curve', 'Spline'] and geo_socket is not None:
+                    self_name = geo_socket
+                else:
+                    raise RuntimeError(f"The method {meth_name} on node {self.node_name} is {family}: it requires a self argument for class {class_name}.")
+                
+        # ---------------------------------------------------------------------------
+        # Arguments
+        
+        args = Arguments()
+
+        if family in ['CAPT_ATTR', 'ATTRIBUTE']:
+            args.add(Argument.Other(header_str="self", call_str=""))
+            
+        for uname in inp_unames:
+            wsocks = self.wnode.inputs.unames[uname]
+            
+            wsock = None
+            if isinstance(wsocks, list):
+                for ws in wsocks:
+                    if ws.enabled:
+                        wsock = ws
+                        break
+            else:
+                wsock = wsocks
+                
+            if wsock is None:
+                continue
+                
+            is_self  = uname == self_name
+            args.add(Argument.Socket(uname, wsocket=wsock, is_self=is_self))
+            
+        for name, param in self.wnode.parameters.items():
+            is_fixed = name in fixed
+            value = fixed[name] if is_fixed else param.default
+            args.append(Argument.Param(name, value, param=param, is_fixed=is_fixed))
+            
+        if family == 'PROPERTY':
+            args.add(Argument.Other(header_str="", call_str="label=f\"{self.node_chain_label}." + meth_name + "\""))
+
+        if family == 'CAPT_ATTR':
+            args.add(Argument.Other(header_str=f"domain='{self.domain}'"))
+
+        # ----- Ensure the socket arguments are properly ordered
+        
+        args.check_order(self.wnode.bl_idname)
+        
+        # ----------------------------------------------------------------------------------------------------
+        # Function header
+        #
+        # @decorator
+        # def method(self, args...):
+        
+        # ----- Static method
+        # @staticmethod
+        # def method(args,...):
+        
+        is_cls = False
+        if family in 'STATIC':
+            yield _1_ + "@staticmethod"
+
+        # ----- Class method
+        # @classmethod
+        # def method(cls, args,...):
+
+        elif family in ['CLASS', 'CONSTRUCTOR']:
+            yield _1_ + "@classmethod"
+            args.add(Argument.Cls())
+            is_cls = True
+
+        # ----- Property
+        # @property
+        # def method(self, args,...):
+
+        elif family == 'PROPERTY':
+            yield _1_ + "@property"
+        
+        elif family == 'ATTRIBUTE':
+            yield _1_ + "@property"
+
+        # ----- Other
+        # def method(self, args,...):
+        
+        yield _1_ + f"def {meth_name}({args.sheader}):"
+        
+        # ----------------------------------------------------------------------------------------------------
+        # Node call string
+        
+        snode_call = f"nodes.{self.wnode.node_name}({args.scall})"
+        
+        # ----------------------------------------------------------------------------------------------------
+        # Comment
+        
+        doc = gd.Section(f"{meth_name}", level=0)
+        doc.append(
+            gd.Description("Node:", gd.Link(self.wnode.node_name, "../nodes/{self.node_name}.md"))
+        )
+        
+        doc.append(gd.Doc(gd.Link("Top", '#' + gd.Section.title_tag(f"Class {self.class_name}")), gd.Link("Index", "/docs/index.md")))
+        
+        
+        if family == 'PROPERTY':
+            sample = f"v = {class_name.lower()}.{meth_name}"
+            
+        elif family in ['CONSTRUCTOR', 'STATIC', 'CLASS']:
+            sample = f"v = {class_name}.{meth_name}({args.scall_demo})"
+            
+        else:
+            sample = f"v = {class_name.lower()}.{meth_name}({args.scall_demo})"
+        
+        doc.append(gd.Python(sample))
+        
+        # ----- Arguments
+        
+        section = doc.get_subsection("Arguments")
+        args.comment_section(section)
+        
+        # ----- Implementation
+        
+        section = doc.get_subsection("Node creation")
+        section.append(gd.Python(f"node = {snode_call}"))
+        
+        # ----- Returns
+        
+        section = doc.get_subsection("Returns")
+        depth = section.level + 1
+        
+        if family == 'ATTRIBUTE':
+            section.append(gd.Doc(str(ret_unames[list(ret_unames)[self.output_index]]), depth=depth))
+
+        else:
+            if len(ret_unames) == 0:
+                section.append(gd.Doc("self", depth=depth))
+
+            elif len(ret_unames) == 1:
+                section.append(gd.Doc(str(ret_unames[list(ret_unames)[0]]), depth=depth))
+            
+            else:
+                s = "Sockets ["
+                sep = ""
+                for uname in ret_unames:
+                    s += f"{sep}{uname} ({ret_unames[uname]})"
+                    sep = ", "
+                s += "]"
+                section.append(gd.Doc(s, depth=depth))
+                
+        # ----- Done
+
+        first = True
+        for line in doc.gen_text():
+            if first:
+                yield _2_ + '""" ' + line
+                first = False
+            else:
+                yield _2_ + line
+                
+        yield _2_ + '"""' + "\n"
+        
+        # ----- Collect the documentation
+        
+        data_class.meths_doc[meth_name] = doc
+    
+        # ----------------------------------------------------------------------------------------------------
+        # ----- Call and return
+
+        # ----------------------------------------------------------------------------------------------------
+        # PROPERTY: create a local attribute plus create children properties
+        # if the resulting node has several sockets:
+        #
+        # @property
+        # def length(self):
+        #     if self.length_ is None:
+        #         self.length_ = Node(...).length
+        #     return self.length_
+        #
+        # or
+        #
+        # @property
+        # def components(self):
+        #     if self.components is None:
+        #         self.components_ = Node(...)
+        #     return self.components_
+        #
+        # @property
+        # def mesh_component(self):
+        #     return self.components.mesh
+        #
+        # @property
+        # def curve_component(self):
+        #     return self.components.curve
+    
+        if family == 'PROPERTY':
+            
+            if len(ret_unames) == 0:
+                raise RuntimeError(f"Impossible to implement a property on {self.node_name} with not output sockets!")
+                
+            # ----- Main property
+            
+            if self.is_main_prop:
+                yield _2_ + f"if self.{self.main_prop_name}_ is None:"
+                yield _3_ + f"self.{self.main_prop_name}_ = {snode_call}"
+            
+                if len(ret_unames) == 1:
+                    yield f".{list(ret_unames)[0]}"
+                    
+                yield _2_ + f"return self.{meth_name}_\n"
+                
+            # ----- Socket prperty
+            
+            else:
+                
+                sock_name = list(ret_unames)[self.output_index]
+                yield _2_ + f"return self.{self.main_prop_name}.{sock_name}\n"
+    
+                if self.prop_is_settable:
+                    yield _1_ +f"@{meth_name}.setter"
+                    yield _1_ + f"def {meth_name}(self, value):"
+                    yield _2_ + f"self.{self.main_prop_name}.{sock_name} = value\n"
+        
+                    
+        # ----------------------------------------------------------------------------------------------------
+        # ATTRIBUTE: the attribute dictionary contains:
+        # - capture      : False or True if if is the implementation of the captur_attr method
+        # - capture_meth : Name of the capture_attr method (when capture is False) 
+        # - domain       : The attribute domain
+        # - output_index : The index of the output socket
+        #
+        # Implementation depends upon the capture value
+        # True:  The capture method with domain argument to cover all the possible domains
+        # False: Property with a specific domain
+        #
+        # ----- capture = True:
+        # 
+        # def capture_attr(self, domain='POINT'):
+        #      node = nodes.NodeAttr()
+        #      node.as_atribute(owning_socket=self, domain=domain)
+        #      return node.socket # When only one output socket
+        #      return node        # When several output sockets
+        #
+        # ----- capture = False
+        #
+        # @property
+        # def point_attr(self, domain='POINT'):
+        #      return self.capture_attr(domain=domain)
+        #
+        # If the attribute has several output sockets (GeometryNodeInputMeshIsland returns island_vertex and island_count),
+        # each output socket is implemented. The names are provided in prop_names which is mandatory
+        #
+        # @property
+        # def point_attr_socket(self):
+        #      return self.capture(domain='POINT').output_sockets[output_index]
+
+        elif family == 'CAPT_ATTR':
+            
+            yield _2_ + f"attr_name = '{meth_name}_' + domain" 
+            yield _2_ +  "if not hasattr(self, attr_name):"
+            yield _3_ + f"node = {snode_call}"
+            yield _3_ +  "node.as_attribute(owning_socket=self, domain=domain)"
+            yield _3_ +  "setattr(self, attr_name, node)"
+        
+            if len(ret_unames) == 1:
+                yield _2_ + f"return getattr(self, attr_name).{list(ret_unames)[0]}\n"
+            else:
+                yield _2_ +  "return getattr(self, attr_name)\n"
+        
+        elif family == 'ATTRIBUTE':
+            
+            s =  _2_ + f"return self.{self.capture_meth}(domain='{self.domain}')"
+            if len(ret_unames) > 1:
+                s += f".{list(ret_unames)[self.output_index]}"
+            yield s + "\n"
+                
+        # ----------------------------------------------------------------------------------------------------
+        # Other : can return 3 things depending on the number of output sockets in ret_unames
+        #
+        # 0. no socket   : return None
+        # 1. 1 socket    : return the socket
+        # 2: > 1 sockets : return the node
+        #
+        # def method(self,...):
+        #     Node(...)
+        #
+        # def method(self,...):
+        #     return Node(...).mesh
+        #
+        # def method(self,...):
+        #     return Node(...)
+    
+        else:
+            if len(ret_unames) == 0:
+                yield _2_ + f"{snode_call}\n"
+                
+            else:
+                if self.stack:
+                    
+                    if len(ret_unames) == 1:
+                        yield _2_ + f"return self.stack({snode_call})\n"
+                        
+                    else:
+                        yield _2_ + f"node = {snode_call}"
+                        yield _2_ + "self.stack(node)"
+                        
+                        if len(ret_unames) == 2:
+                            yield _2_ + f"return node.{list(ret_unames)[1]}\n"
+                        else:
+                            yield _2_ + "return node\n"
+
+                else:
+                    if len(ret_unames) == 1:
+                        if is_cls:
+                            yield _2_ + f"return cls({snode_call}.{list(ret_unames)[0]})\n"
+                        else:
+                            yield _2_ + f"return {snode_call}.{list(ret_unames)[0]}\n"
+                    
+                    else:
+                        yield _2_ + f"return {snode_call}\n"    
     
 
 # ========================================================================================================================
@@ -294,9 +651,10 @@ class DataClass:
         
         self.is_global   = False
         
-        # ----- Communication
+        # ----- Documentation
         
-        self.doc = gd.Section(f"Class {self.class_name}", level=0)
+        self.doc       = None # Built by build_doc method called when generating the source code
+        self.meths_doc = {}   # Filled by each gen_call
         
         # ----------------------------------------------------------------------------------------------------
         # Add the multi classes methods
@@ -368,13 +726,32 @@ class DataClass:
     # Add a method
     
     def add_call(self, family, bl_idname, meth_name, **kwargs):
-        self.methods_.append(NodeCall(family, self.wnodes[bl_idname], class_name=self.class_name, meth_name=meth_name, **kwargs))
+        if family == 'STACK':
+            stack = True
+            family = 'METHOD'
+        else:
+            stack = False
+        
+        self.methods_.append(NodeCall(family, self.wnodes[bl_idname], class_name=self.class_name, meth_name=meth_name, stack=stack, **kwargs))
         
     # ----------------------------------------------------------------------------------------------------
     # Add node properties
     
     def add_property(self, bl_idname, meth_name, settable=False, prop_names=None, **kwargs):
-        self.methods_.append(NodeCall.Property(self.wnodes[bl_idname], self.class_name, meth_name, settable=settable, prop_names=prop_names, **kwargs))
+
+        #self.methods_.append(NodeCall.Property(self.wnodes[bl_idname], self.class_name, meth_name, settable=settable, prop_names=prop_names, **kwargs))
+        
+        # ----- The main property
+        
+        self.methods_.append(NodeCall.Property(self.wnodes[bl_idname], self.class_name, meth_name, **kwargs))
+        if prop_names is None:
+            return
+        
+        # ----- Several output sockets --> several properties
+        
+        for index, prop_name in enumerate(prop_names):
+            self.methods_.append(NodeCall.Property(self.wnodes[bl_idname], self.class_name, prop_name, settable=settable, main_prop_name=meth_name, output_index=index, **kwargs))
+            
         
     # ----------------------------------------------------------------------------------------------------
     # Add attributes
@@ -387,28 +764,6 @@ class DataClass:
         names = [meth_name] if type(meth_name) is str else meth_name
         for index, name in enumerate(names):
             self.methods_.append(NodeCall.Attribute(self.wnodes[bl_idname], self.class_name, name, attr_name=attr_name, domain=domain, output_index=index))
-            
-    def add_attribute_OLD(self, bl_idname, meth_name, capture=False, domains=None, no_prefix='NONE', prop_names=None):
-
-        if domains is None:
-            domains = ['POINT', 'EDGE', 'FACE', 'CORNER', 'CURVE', 'INSTANCE']
-            
-        capture_meth = f"capture_{meth_name}"
-            
-        if capture:
-            self.methods_.append(NodeCall.Attribute(self.wnodes[bl_idname], self.class_name, capture_meth, capture_meth=None, domain=domains[0]))
-            
-        for domain in domains:
-            if prop_names is None:
-                m_name = meth_name if domain == no_prefix else f"{domain.lower()}_{meth_name}"
-                self.methods_.append(NodeCall.Attribute(
-                    self.wnodes[bl_idname], self.class_name, m_name, capture_meth=capture_meth, domain=domain))
-                
-            else:
-                for i, m_name in enumerate(prop_names):
-                    self.methods_.append(NodeCall.Attribute(
-                        self.wnodes[bl_idname], self.class_name, m_name, capture_meth=capture_meth, domain=domain, output_index=i))
-                    
 
     # ----------------------------------------------------------------------------------------------------
     # Template
@@ -420,6 +775,47 @@ class DataClass:
         for templ, repl in replace.items():
             s = s.replace(templ, repl)
         return s
+    
+    # ----------------------------------------------------------------------------------------------------
+    # The class documentation
+    
+    def build_doc(self):
+        
+        self.doc = gd.Section(f"Class {self.class_name}", level=0)
+        if self.super_class != "":
+            self.doc.append(
+                gd.Description("Inherits from:", gd.BoldItalic(self.super_class))
+                )
+            
+        self.doc.append(gd.Doc(gd.Link("Index", "/docs/index.md")))
+        
+        for family, label in FAMILIES.items():
+            meths = self.methods(family)
+            if meths:
+                
+                section = self.doc.get_subsection(label[1])
+                lst = gd.List(align_char=':')
+                section.append(lst)
+                
+                meths.sort(key=lambda nc: nc.meth_name)
+                for nc in meths:
+                    lst.add_item(nc.class_comment)
+                    #lst.add_item(gd.Text(nc.class_comment))
+        
+        
+        return self.doc
+    
+    # ----------------------------------------------------------------------------------------------------
+    # The meths documentation
+    
+    def methods_documentation(self):
+        
+        doc = gd.Section("Methods reference", level=1)
+        names = list(self.meths_doc.keys())
+        names.sort()
+        for name in names:
+            doc.add_subsection(self.meths_doc[name])
+        return doc
 
     # ----------------------------------------------------------------------------------------------------
     # Generate the class source code
@@ -471,19 +867,14 @@ class DataClass:
         # ----------------------------------------------------------------------------------------------------
         # Comments
         
-        yield _1_ + '"""' + f" Data socket {self.class_name}"
+        doc = self.build_doc()
         
-        for family, label in FAMILIES.items():
-            meths = self.methods(family)
-            if meths:
-                meths.sort(key=lambda nc: nc.meth_name)
-                yield _0_
-                yield _1_ + f"{label[1]}"
-                yield _1_ + "-" * len(label[1])
-                for nc in meths:
-                    yield _2_ + f"{nc.class_comment}"
-            
-        yield _1_ + '"""'
+        first = True
+        indent = _1_ + '""" '
+        for line in doc.gen_text(100):
+            yield indent + line
+            indent = _1_
+        yield _1_ + '"""' + "\n"
         
         # ----------------------------------------------------------------------------------------------------
         # Properties attributes
@@ -506,27 +897,24 @@ class DataClass:
             yield f"\n{_1_}# {'-'*100}{_1_}# {label[1]}\n"
             
             for nc in meths:
-                for line in nc.wnode.gen_call(family, nc.class_name, nc.meth_name, self_name=nc.self_name, properties=nc.properties, attribute=nc.attribute, **nc.fixed):
+                for line in nc.gen_call(self):
                     yield line
                     
+    # ----------------------------------------------------------------------------------------------------
+    # Register the methods in the nodes
                     
-    def feed_nodes_md(self, nodes_md):
-                    
-        for family, label in FAMILIES.items():
-            meths = self.methods(family)
-            if meths:
-                meths.sort(key=lambda nc: nc.meth_name)
-
-                for nc in meths:
-                    node_name = nc.wnode.node_name
-                    if nodes_md.get(node_name) is None:
-                        nodes_md[node_name] = {}
-                    if nodes_md[node_name].get(label[1]) is None:
-                        nodes_md[node_name][label[1]] = []
-                    nodes_md[node_name][label[1]].append(f"**{self.class_name}**._{nc.meth_name}_")
-                    
+    def register_nodes(self):
+        
+        for nc in self.methods_:
             
-                    
+            ref = (nc.meth_name, FAMILIES[nc.family][0])
+            
+            data_socks = nc.wnode.data_sockets
+            lst = data_socks.get(self.class_name)
+            if lst is None:
+                data_socks[self.class_name] = [ref]
+            else:
+                lst.append(ref)
                     
 
 # -----------------------------------------------------------------------------------------------------------------------------
@@ -623,7 +1011,7 @@ class FloatGen(DataClass):
 
         self.add_call('METHOD', 'ShaderNodeValToRGB',        'color_ramp'       )
 
-        self.add_call('STACK', 'ShaderNodeFloatCurve',       'curve'            )
+        self.add_call('STACK', 'ShaderNodeFloatCurve',       'curve',         self_name="value"  )
         self.add_call('STACK', 'ShaderNodeClamp',            'clamp'            )
         
         
@@ -730,6 +1118,7 @@ class GeometryGen(DataClass):
 
         # ----- Attributes captures
         
+        
         self.add_attr_capture('GeometryNodeInputID',        'ID',       default_domain='POINT'  )
         self.add_attr_capture('GeometryNodeInputIndex',     'index',    default_domain='POINT'  )
         self.add_attr_capture('GeometryNodeInputNormal',    'normal',   default_domain='FACE'   )
@@ -751,6 +1140,8 @@ class GeometryGen(DataClass):
                           prop_names=('mesh_component', 'points_component', 'curve_component', 'volume_component', 'instances_component'))
         
         # ----- Methods
+        
+        self.add_call('STACK',  'GeometryNodeCaptureAttribute',     'capture_attribute')
         
         self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_boolean', data_type = 'BOOLEAN'      )
         self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_integer', data_type = 'INT'          )
@@ -783,7 +1174,7 @@ class GeometryGen(DataClass):
         
 class MeshGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Mesh', 'Geometry')
+        super().__init__(nodes, 'Mesh', 'gn.Geometry')
         
         # ----------------------------------------------------------------------------------------------------
         # Constructors
@@ -875,7 +1266,7 @@ class MeshGen(DataClass):
         
 class PointsGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Points', 'Geometry')
+        super().__init__(nodes, 'Points', 'gn.Geometry')
         
         self.add_call('STACK',  'GeometryNodeSetPointRadius',    'set_radius'          )
         
@@ -888,7 +1279,7 @@ class PointsGen(DataClass):
         
 class InstancesGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Instances', 'Geometry')
+        super().__init__(nodes, 'Instances', 'gn.Geometry')
         
         self.add_attribute('GeometryNodeInputIndex', 'instance_index', 'index', domain='INSTANCE')
         
@@ -903,7 +1294,7 @@ class InstancesGen(DataClass):
         
 class VolumeGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Volume', 'Geometry')
+        super().__init__(nodes, 'Volume', 'gn.Geometry')
         
         self.add_call('METHOD', 'GeometryNodeVolumeToMesh', 'to_mesh' , ret_class='Mesh')
         
@@ -912,7 +1303,7 @@ class VolumeGen(DataClass):
 
 class SplineGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Spline', 'Geometry')
+        super().__init__(nodes, 'Spline', 'gn.Geometry')
         
         # ----- Attributes captures
         
@@ -960,7 +1351,7 @@ class SplineGen(DataClass):
         
 class CurveGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Curve', 'Spline')
+        super().__init__(nodes, 'Curve', 'gn.Spline')
         
         self.add_call('CONSTRUCTOR', 'GeometryNodeCurvePrimitiveBezierSegment', 'BezierSegment'     )
         self.add_call('CONSTRUCTOR', 'GeometryNodeCurvePrimitiveCircle',        'Circle'            )

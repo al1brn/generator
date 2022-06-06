@@ -43,8 +43,10 @@ class Text:
         
     def add(self, *tokens):
         for token in tokens:
+            
             if type(token) is str:
                 self.tokens.append((token, token))
+            
             elif isinstance(token, (tuple, list)):
                 if len(token) != 2:
                     raise RuntimeError(f"Invalid token {token}. Only str and couples are valid tokens")
@@ -52,6 +54,9 @@ class Text:
                     raise RuntimeError(f"Invalid token index 0 '{token[0]}', type {type(token[0]).__name__}. Only str are valid types")
                 if type(token[1]) is not str:
                     raise RuntimeError(f"Invalid token index 1 '{token[1]}', type {type(token[1]).__name__}. Only str are valid types")
+                if token[0] == "" or token[1] == "":
+                    raise RuntimeError(f"Token strings can't be empty:  '{token}'.")
+                    
                     
                 self.tokens.append(token)
             else:
@@ -100,21 +105,25 @@ class Text:
         w = width - first_indent
         
         for text in self.paragraphs(False):
-            words = text.split(' ')
-            s = ""
-            for word in words:
-                s += word
-                if len(s) > w:
+            
+            lines = text.split("\n")
+            
+            for line in lines:
+                words = line.split(' ')
+                s = ""
+                for word in words:
+                    s += word
+                    if len(s) > w:
+                        yield s
+                        s = ""
+                        w = width
+                    else:
+                        s += " "
+        
+                if s != "":
                     yield s
-                    s = ""
-                    w = width
-                else:
-                    s += " "
-    
-            if s != "":
-                yield s
-                
-            w = width
+                    
+                w = width
             
             
 # ====================================================================================================
@@ -148,6 +157,21 @@ class Doc(list):
         for doc in self:
             for line in doc.gen_text(width, first_indent=first):
                 yield line
+                
+    def get_lists(self, create=True, **kwargs):
+        
+        lsts = []
+        for item in self:
+            if isinstance(item, List):
+                lsts.append(item)
+        
+        if len(lsts) == 0 and create:
+            lst = List(**kwargs)
+            self.append(lst)
+            return [lst]
+        else:
+            return lsts
+                
 
 class Section(Doc):
     
@@ -167,6 +191,17 @@ class Section(Doc):
             section = Section(title, level=self.level + 1)
             self.subsections[tag] = section
         return section
+    
+    def add_subsection(self, section):
+        delta = self.level - section.level + 1
+        section.change_level(delta)
+        self.subsections[Section.title_tag(section.title)] = section
+        
+    
+    def change_level(self, delta):
+        self.level += delta
+        for section in self.subsections.values():
+            section.change_level(delta)
     
     @staticmethod
     def title_tag(title):
@@ -204,13 +239,23 @@ class Section(Doc):
         
     def gen_text(self, width=100, first_indent=0):
         
-        indent = "    " * self.level
+        if self.level > 0:
+            indent = "    " * (self.level - 1)
+        else:
+            indent = ""
         
         # ----- The secton title
         
-        yield "\n"
+        
+        if self.level > 0:
+            yield "\n"
         yield indent + self.title
-        yield indent + '-'*len(self.title)
+        
+        if self.level == 0:
+            yield "\n"
+        else:
+            c = '=' if self.level == 1 else '-'
+            yield indent + c*len(self.title)
         
         # ----- Proper content (description...)
         
@@ -239,13 +284,12 @@ class Description(Doc):
         indent = "  " * self.depth + "> "
         for line in super().gen_md():
             yield indent + line
+        yield "\n"
         
     def gen_text(self, width=100, first_indent=0):
         indent = "    " * self.depth + "| "
-        yield "\n"
         for line in super().gen_text(width):
             yield indent + line
-        yield "\n"
 
 
 class Python(Doc):
@@ -261,14 +305,14 @@ class Python(Doc):
         yield "\n"
         for line in super().gen_text(width):
             yield indent + line
-        yield "\n"
         
 class List(Doc):
-    def __init__(self, *items, depth=0, ordered=False):
+    def __init__(self, *items, depth=0, ordered=False, align_char = None):
         super().__init__(depth=depth)
         self.ordered = ordered
         self.items = []
         self.add_item(*items)
+        self.align_char = align_char
             
     def add_item(self, *items):
         for item in items:
@@ -288,11 +332,26 @@ class List(Doc):
         yield "\n"
         
     def gen_text(self, width=100, first_indent=0):
+        
+        c = self.align_char
+        c_loc = 0
+        if c is not None:
+            for index, item in enumerate(self.items):
+                for line in item.gen_text():
+                    c_loc = max(c_loc, line.find(c))
+                    break
+        
         indent = "    " * self.depth
         for index, item in enumerate(self.items):
             prefix = indent + f"{index}. " if self.ordered  else "- "
+            first = True
             for line in item.gen_text(width):
-                yield prefix + line
+                if first and c is not None:
+                    p = line.find(c)
+                    yield prefix + f"{line[:p]:{c_loc}s}{line[p:]}"
+                    first = False
+                else:
+                    yield prefix + line
                 prefix = indent + "  "
             
             
