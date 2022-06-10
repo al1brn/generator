@@ -1038,7 +1038,7 @@ class VectorGen(DataClass):
         # ----------------------------------------------------------------------------------------------------
         # x, y, z properties
         
-        self.add_property('ShaderNodeSeparateXYZ', 'separate', settable=True)
+        self.add_property('ShaderNodeSeparateXYZ', 'separate', settable=True, prop_names=['x', 'y', 'z'])
 
         # ----------------------------------------------------------------------------------------------------
         # Methods
@@ -1071,7 +1071,7 @@ class ColorGen(DataClass):
         # ----------------------------------------------------------------------------------------------------
         # r, g, b properties
         
-        self.add_property('ShaderNodeSeparateRGB', 'separate', settable=True)
+        self.add_property('ShaderNodeSeparateRGB', 'separate', settable=True, prop_names = ['r', 'g', 'b'])
 
         # ----------------------------------------------------------------------------------------------------
         # Methods
@@ -1447,7 +1447,7 @@ class ObjectGen(DataClass):
     def __init__(self, nodes):
         super().__init__(nodes, 'Object', 'dsock.Object')
 
-        self.add_property('GeometryNodeObjectInfo', 'info')
+        self.add_property('GeometryNodeObjectInfo', 'info', prop_names = ['location', 'rotation', 'scale', 'geometry'])
 
 
 # =============================================================================================================================
