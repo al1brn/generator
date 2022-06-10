@@ -8,434 +8,598 @@ Created on Fri Jun  3 16:40:15 2022
 
 import re
 
-target_string = "The price of ice-creams PINEAPPLE 20 MANGO 30 CHOCOLATE 40"
-
-# two groups enclosed in separate ( and ) bracket
-# group 1: find all uppercase letter
-# group 2: find all numbers
-# you can compile a pattern or directly pass to the finditer() method
-pattern = re.compile(r"(\b[A-Z]+\b).(\b\d+\b)")
-
-# find all matches to groups
-for match in pattern.finditer(target_string):
-    break
-    # extract words
-    print(match.group(1))
-    # extract numbers
-    print(match.group(2))
-
-
-class Doc:
-    
-    
-    def replace(self, line):
-        print(line)
-        print()
-        
-        i_pattern = r"(^\s*)(([->]\s)?(.*))"
-        
-        i_match = re.search(i_pattern, line)
-        
-        """
-        print(1, len(i_match.group(1)))
-        print(2, i_match.group(2))
-        print(3, i_match.group(3))
-        print(4, i_match.group(4))
-        """
-        
-        print(f"Indentation: {len(i_match.group(1))}, content={i_match.group(4)}{'' if i_match.group(3) is None else ', list'}")
-        
-        print()
-        
-        return
-        
-
-        pattern = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
-
-        for match in pattern.finditer(line):
-            print("-----")
-            #match = re.search(r"\[(.+)\]\((.+)\)", line)
-            #if not match:
-            #    print("No match")
-            #    break
-            
-            print("SPAN:", match.span())
-            print("GROUP(1):", match.group(1))
-            print("GROUP(2):", match.group(2))
-            
-            for g in match.groups():
-                print("   ", g)
-            
-            print()
-        
-        return line
-    
-Doc().replace("No Indent")
-Doc().replace("    Indented")
-Doc().replace("    - List")
-Doc().replace("      List cont")
-
-
-    
-line = "A link [Foo](Bar) and the next chars. Another link [Link label](link url) (it's an image in fact)"
-print(len(line))
-
-Doc().replace(line) 
-           
-
-
-
-br = ("\n", "<br>")
-    
-
-def Link(text, link):
-    return (text, f"[{text}]({link})")
-
-def Bold(text):
-    return (text, f"**{text}**")
-
-def Italic(text):
-    return (text, f"_{text}_")
-
-def BoldItalic(text):
-    return (text, f"***{text}***")
-
-def Code(text):
-    return (text, f"`{text}`")
-            
-
-# ====================================================================================================
-# Text: manages formated text (bold, links...)
-# yield unformetted version for inline comments
-
-class Text:
-    
-    def __init__(self, *tokens):
-        self.tokens = []
-        self.add(*tokens)
-        
-    def __repr__(self):
-        s = ">>>>> Text\n"
-        for t in self.tokens:
-            s += "    " + str(t) + "\n"
-        return s + "<<<<<"
-        
-    def add(self, *tokens):
-        for token in tokens:
-            
-            if type(token) is str:
-                self.tokens.append((token, token))
-            
-            elif isinstance(token, (tuple, list)):
-                if len(token) != 2:
-                    raise RuntimeError(f"Invalid token {token}. Only str and couples are valid tokens")
-                if type(token[0]) is not str:
-                    raise RuntimeError(f"Invalid token index 0 '{token[0]}', type {type(token[0]).__name__}. Only str are valid types")
-                if type(token[1]) is not str:
-                    raise RuntimeError(f"Invalid token index 1 '{token[1]}', type {type(token[1]).__name__}. Only str are valid types")
-                if token[0] == "" or token[1] == "":
-                    raise RuntimeError(f"Token strings can't be empty:  '{token}'.")
-                    
-                    
-                self.tokens.append(token)
-            else:
-                raise RuntimeError(f"Invalid token {token}. Only str and couples are valid tokens")
-    
-    def paragraphs(self, md=True):
-        s   = ""
-        sep = ""
-        index = 1 if md else 0
-        for token in self.tokens:
-            
-            #print("PARAGRAPHS.token", token)
-            
-            if token == br:
-                if md:
-                    s += '<br>'
-                else:
-                    yield s
-                    s = ""
-                sep = ""
-                    
-            else:
-                try:
-                    c = token[0][0]
-                except Exception as e:
-                    print(f"PARAGRAPHS, token= '{token}', token[0]: '{token[0]}', type: {type(token[0]).__name__}")
-                    raise e
-                
-                if c not in ['.', ',']:
-                    s += sep
-                    
-                s += token[index]
-                sep = " "
-                
-        if s != "":
-            yield s
-        
-        
-    def gen_md(self):
-        for line in self.paragraphs(True):
-            yield line
-        #yield "\n"
-        
-    def gen_text(self, width=100, first_indent=0):
-        
-        w = width - first_indent
-        
-        for text in self.paragraphs(False):
-            
-            lines = text.split("\n")
-            
-            for line in lines:
-                words = line.split(' ')
-                s = ""
-                for word in words:
-                    s += word
-                    if len(s) > w:
-                        yield s
-                        s = ""
-                        w = width
-                    else:
-                        s += " "
-        
-                if s != "":
-                    yield s
-                    
-                w = width
-            
-            
-# ====================================================================================================
-# Documentation
+# ----------------------------------------------------------------------------------------------------
+# Block: a list of blocks
 #
-# A doc is a list of documentations :-)
+# Inheritance:
+# Text    : list of lines with a same depth
+# Section : Non null title
+# Doc     : A full document, top parent
 
-class Doc(list):
+class Block(list):
     
-    def __init__(self, *tokens, depth=0):
-        super().__init__()
-        self.depth = depth
-        self.text  = Text(*tokens)
-    
-    def gen_md(self):
-        indent = "  " * self.depth
-        for line in self.text.gen_md():
-            yield indent + line
-            
-        for doc in self:
-            for line in doc.gen_md():
-                yield line
-                
-    def gen_text(self, width=100, first_indent=0):
-        indent = "    " * self.depth
-        first  = first_indent
-        for line in self.text.gen_text(width, first_indent=first_indent):
-            yield indent + line
-            first = 0
+    def __init__(self, parent=None):
+        self.parent = parent
+        if parent is not None:
+            parent.append(self)
         
-        for doc in self:
-            for line in doc.gen_text(width, first_indent=first):
-                yield line
-                
-    def get_lists(self, create=True, **kwargs):
-        
-        lsts = []
-        for item in self:
-            if isinstance(item, List):
-                lsts.append(item)
-        
-        if len(lsts) == 0 and create:
-            lst = List(**kwargs)
-            self.append(lst)
-            return [lst]
-        else:
-            return lsts
-                
-
-class Section(Doc):
-    
-    def __init__(self, title, level=0):
-        super().__init__()
-        self.title = title
-        self.level = level
-        self.tag   = Section.title_tag(title)
-        self.subsections = {}
-        
-    def get_subsection(self, title):
-        tag = Section.title_tag(title)
-        section = self.subsections.get(tag)
-        if section is None:
-            if title is None:
-                title = tag
-            section = Section(title, level=self.level + 1)
-            self.subsections[tag] = section
-        return section
-    
-    def add_subsection(self, section):
-        delta = self.level - section.level + 1
-        section.change_level(delta)
-        self.subsections[Section.title_tag(section.title)] = section
-        
-    
-    def change_level(self, delta):
-        self.level += delta
-        for section in self.subsections.values():
-            section.change_level(delta)
-    
-    @staticmethod
-    def title_tag(title):
-        words = title.lower().split(' ')
+    def __str__(self):
         s = ""
-        sep = ""
-        for word in words:
-            s += sep + word
-            sep = "-"
+        for line in self.gen_text():
+            s += line + "\n"
         return s
     
-    def gen_md(self):
+    def __repr__(self):
         
-        # ----- The secton title
-        
-        #if self.tag is None:
-        #    stag = ""
-        #else:
-        #    stag = " {#" + self.tag + "}"
-            
-        yield f"\n{'#'*(self.level+1)} {self.title}\n"
-        #yield f"\n{'#'*(self.level+1)} {self.title}{stag}\n"
-        
-        # ----- Proper content (description...)
-        
-        for line in super().gen_md():
-            yield line
-            
-        # ----- Sub sections
-        
-        for section in self.subsections.values():
-            for line in section.gen_md():
-                yield line
-            
-        
-    def gen_text(self, width=100, first_indent=0):
-        
-        if self.level > 0:
-            indent = "    " * (self.level - 1)
-        else:
-            indent = ""
-        
-        # ----- The secton title
-        
-        
-        if self.level > 0:
-            yield "\n"
-        yield indent + self.title
-        
-        if self.level == 0:
-            yield "\n"
-        else:
-            c = '=' if self.level == 1 else '-'
-            yield indent + c*len(self.title)
-        
-        # ----- Proper content (description...)
-        
-        for line in super().gen_text(width):
-            yield indent + line
-
-        # ----- Sub sections
-        
-        for section in self.subsections.values():
-            for line in section.gen_text(width=width):
-                yield line
-                
-    def gen_toc(self):
-
-        link = Text.Link(self.title, self.tag)
-        yield "  " * self.level + link[1]
-        
-        for section in self.subsections.values():
-            for line in section.gen_toc():
-                yield line
-            
-            
-class Description(Doc):
+        s = f"{'    '*self.depth}<{type(self).__name__}, blocks={len(self)}>\n"
+        for block in self:
+            s += repr(block)
+        return s
     
-    def gen_md(self):
-        indent = "  " * self.depth + "> "
-        for line in super().gen_md():
-            yield indent + line
-        yield "\n"
+    # ------------------------------------------------------------------------------------------
+    # The depth of the block
+
+    @property
+    def depth(self):
+        if self.parent is None:
+            return 0
+        else:
+            return 1 + self.parent.depth
         
-    def gen_text(self, width=100, first_indent=0):
-        indent = "    " * self.depth + "| "
-        for line in super().gen_text(width):
-            yield indent + line
+    # ------------------------------------------------------------------------------------------
+    # Access to the top block
+        
+    @property
+    def top(self):
+        if self.parent is None:
+            return self
+        else:
+            return self.parent.top
+        
+    @property
+    def doc(self):
+        doc = self.top
+        return doc if isinstance(doc, Doc) else None
 
+    # ------------------------------------------------------------------------------------------
+    # Text indentation for text output    
+        
+    @property
+    def text_indent(self):
+        doc = self.doc
+        return ("    " if doc is None else doc.base_indent) * self.depth
 
-class Python(Doc):
-
+    # ------------------------------------------------------------------------------------------
+    # Text output
+        
+    def gen_text(self):
+        for block in self:
+            for line in block.gen_text():
+                yield line
+                
+    # ------------------------------------------------------------------------------------------
+    # Markdown output
+        
     def gen_md(self):
-        yield "\n```python"
+        for block in self:
+            for line in block.gen_md():
+                yield line
+                
+                
+# ----------------------------------------------------------------------------------------------------
+# Text: a list of lines
+#
+# The prefix is used for lists (- or 1.) and evidence (>)          
+        
+class Text(Block):
+    
+    def __init__(self, parent=None, prefix=None):
+        super().__init__(parent)
+        self.prefix = "" if prefix is None else prefix
+        self.lines  = []
+        
+    def __repr__(self):
+        lines = [line[:10] for line in self.lines]
+        s = f"{'    '*self.depth}<Text, blocks: {len(self)}, lines: {len(self.lines)}, prefix='{self.prefix}'> {lines}\n"
+        for block in self:
+            s += repr(block)
+        return s
+        
+    # ------------------------------------------------------------------------------------------
+    # Add lines
+    
+    def add_lines(self, *lines):
+        for line in lines:
+            self.lines.append(line)
+            
+    # ------------------------------------------------------------------------------------------
+    # solve a link
+    
+    def solve_link(self, link):
+        doc = self.doc
+        return link if doc is None else doc.solve_link(link)
+
+    # ------------------------------------------------------------------------------------------
+    # Text output
+    
+    def gen_text(self):
+        indent = self.text_indent
+        first  = True
+        for line in self.lines:
+            if first:
+                yield f"{indent}{self.prefix}{line}"
+                indent += " " * len(self.prefix)
+                first = False
+            else:
+                yield f"{indent}{line}"
+                
+        for line in super().gen_text():
+            yield line
+            
+    # ------------------------------------------------------------------------------------------
+    # Markdown output
+        
+    def gen_md(self):
+        
+        # ---------------------------------------------------------------------------
+        # Replace a link by a solved link
+        
+        def solve(match):
+            start = match.group(1)
+            if start[0] == '!':
+                return start + self.solve_link("image:" + match.group(2))
+            else:
+                return start + self.solve_link(match.group(2))
+            
+        def solve_src(match):
+            return match.group(1) + self.solve_link("image:" + match.group(2))
+        
+        indent = ""
+
+        # ------------------------------------------------------------
+        # Loop on the lines
+        
+        first  = True
+        for line in self.lines:
+            
+            # ----- Solve the image links
+
+            # Markdown syntax
+            
+            line = re.sub(r"(!?\[[^\]]+\]\()([^)]+)", solve, line)
+            
+            # Html syntax
+
+            line = re.sub(r'(<img\s+.*src\s*=\s*")([^"]+)', solve_src, line)
+            
+            # ----- Output
+            
+            if first:
+                yield f"{indent}{self.prefix}{line}"
+                first = False
+                indent = " " * len(self.prefix)
+            else:
+                yield f"{indent}{line}"
+                
         for line in super().gen_md():
             yield line
-        yield "```\n"
-        
-    def gen_text(self, width=100, first_indent=0):
-        indent = "    " 
-        yield "\n"
-        for line in super().gen_text(width):
-            yield indent + line
-        
-class List(Doc):
-    def __init__(self, *items, depth=0, ordered=False, align_char = None):
-        super().__init__(depth=depth)
-        self.ordered = ordered
-        self.items = []
-        self.add_item(*items)
-        self.align_char = align_char
             
-    def add_item(self, *items):
-        for item in items:
-            self.items.append(item)
-            
-    def gen_md(self):
-        
-        yield "\n"
-        
-        indent = "  " * self.depth
-        for index, item in enumerate(self.items):
-            prefix = indent + f"{index}. " if self.ordered  else "- "
-            for line in item.gen_md():
-                yield prefix + line
-                prefix = indent + "  "
                 
-        yield "\n"
+# ----------------------------------------------------------------------------------------------------
+# Section: an entitled Block
+                    
+class Section(Block):
+    
+    md_title_pat  = re.compile(r"\s*(#+)\s(.*\n)")
+    txt_title_pat = re.compile(r"\s*(.+\n)\s*([-=]+\n)")
+    
+    def __init__(self, parent=None, title=None, tag=None):
+        super().__init__(parent)
+        self.title = title
+        self.tag_  = tag
         
-    def gen_text(self, width=100, first_indent=0):
+    # ------------------------------------------------------------------------------------------
+    # Tag property  
+
+    @staticmethod
+    def build_tag(title):
+        return None if title is None else title.lower().replace(' ', '-').replace('.', '_')
+    
+    @property
+    def tag(self):
+        return Section.build_tag(self.title) if self.tag_ is None else self.tag_
+    
+    @tag.setter
+    def tag(self, value):
+        self.tag_ = value
         
-        c = self.align_char
-        c_loc = 0
-        if c is not None:
-            for index, item in enumerate(self.items):
-                for line in item.gen_text():
-                    c_loc = max(c_loc, line.find(c))
-                    break
+    # ------------------------------------------------------------------------------------------
+    # Access to the top section through path syntax:
+    #
+    # Classes reference.class Node.__init__ : section "__init__" in section "class Node" in "Classes reference"
         
-        indent = "    " * self.depth
-        for index, item in enumerate(self.items):
-            prefix = indent + f"{index}. " if self.ordered  else "- "
-            first = True
-            for line in item.gen_text(width):
-                if first and c is not None:
-                    p = line.find(c)
-                    yield prefix + f"{line[:p]:{c_loc}s}{line[p:]}"
-                    first = False
+    def get_section(self, path, use_tag = False):
+        
+        tags = path.split('.', 1)
+        found = None
+        for block in self:
+            
+            if not isinstance(block, Section):
+                continue
+            
+            if block.tag is None:
+                continue
+            
+            if use_tag:
+                if block.tag == tags[0]:
+                    found = block
+            else:
+                if block.title == tags[0]:
+                    found = block
+                    
+            if found is not None:
+                if len(tags) == 1:
+                    return found
                 else:
-                    yield prefix + line
-                prefix = indent + "  "
-            
-            
+                    return found.get_section(tags[1])
+                
+        return None
     
-     
+    # ------------------------------------------------------------------------------------------
+    # Implementation file
+    
+    
+    
+    @property
+    def writing_folder(self):
+        if hasattr(self, 'folder'):
+            return self.folder
+    
+    @property
+    def get_link(self):
+        pass
         
+    
+    
+    # ------------------------------------------------------------------------------------------
+    # Tree of sections (for debug)
+    
+    def tree(self, mode=None):
+        s = "    " * self.depth + str(self.title) + "\n"
+        for block in self:
+            if isinstance(block, Section):
+                s += block.tree(mode=mode)
+        return s
+    
+    # ------------------------------------------------------------------------------------------
+    # Initialization from text
+    
+    def set_text(self, text):
+        
+        # ---------------------------------------------------------------------------
+        # Split in sections
+        
+        txt_title_pat = re.compile(r"\s*(.+)\n\s*([-=]+)\n")
+        md_title_pat  = re.compile(r"\s*(#+)\s(.*)")
+        
+        # Text format
+        # -----------
+        
+        cursor   = 0
+        levels   = []
+        titles   = []
+        texts    = []
+        
+        for match in txt_title_pat.finditer(text):
+            
+            titles.append(match.group(1))
+            levels.append(1 if match.group(2)[0] == "=" else 2)
+            texts.append(text[cursor:match.start()])
+            cursor = match.end()
+            
+        if cursor > 0:
+            texts.append(text[cursor:])
+            
+        # # md format
+            
+        else:
+    
+            for match in md_title_pat.finditer(text):
+                
+                titles.append(match.group(2))
+                levels.append(len(match.group(1)))
+                texts.append(text[cursor:match.start()])
+                cursor = match.end()+1
+    
+            texts.append(text[cursor:])
+            
+        # ---------------------------------------------------------------------------
+        # Normalize the sections levels
+        
+        if levels:
+            min_level = min(levels)
+            for i in range(len(levels)):
+                levels[i] -= min_level
+            
+        # ---------------------------------------------------------------------------
+        # Integrate the introductory text
+        
+        class Stacker:
+            def __init__(self, block, indent, line_type=None, order=1):
+                self.block     = block
+                self.indent    = indent
+                self.line_type = line_type
+                self.order     = order
+                
+        stack = [Stacker(self, -1)]
+        
+        # ----- Loop on the lines
+        
+        for raw_line in texts[0].split("\n"):
+    
+            pattern = r"(^\s*)((([->]\s)|(\d+\.\s))?(.*))"
+            match = re.search(pattern, raw_line)
+            if match is None:
+                raise RuntimeError("Very strange")
+                
+            indent = len(match.group(1))
+            prefix = match.group(3)
+            line   = match.group(6)
+            
+            # ----- Empty line
+            
+            if line.strip() == "":
+                if len(stack) > 1: # First line
+                    stack[-1].block.add_lines("")
+                continue
+            
+            # ----- Line type
+            
+            if prefix is None:
+                line_type = 'TEXT'
+                
+            else:
+                indent += len(prefix)
+                
+                if prefix == '- ':
+                    line_type = 'LIST'
+                    
+                elif prefix == '> ':
+                    line_type = 'EVIDENCE'
+                    
+                elif len(re.findall("\d+\.", prefix)) == 1:
+                    line_type = "ORDERED"
+                    
+                else:
+                    raise RuntimeError(f"Unknown line type '{prefix}' in line: {raw_line}")
+                    
+            # ---------------------------------------------------------------------------
+            # Compare the current indentation with the current one
+            #
+            # If equal
+            #     basically we add the line to the current block (top of the stack)
+            #     but before we check if it is a new list item. In that case, we have
+            #     to crate a new block and to replace to top of the stack with it
+            #
+            # If different
+            #     we create necessarily a new block
+            #         either at the top of the stack if deeper indentation
+            #         if shallower, we must first pop the stack
+                    
+            if indent == stack[-1].indent:
+                
+                # ----- TEXT: always happened to the current block
+                
+                if line_type == 'TEXT':
+                    stack[-1].block.add_lines(line)
+                    
+                # ----- OTHER but equal: we create an new block for lists
+                    
+                elif line_type == stack[-1].line_type:
+                    
+                    if line_type == 'EVIDENCE':
+                        stack[-1].block.add_lines(line)
+                    
+                    else:
+                        if line_type == 'ORDERED':
+                            stack[-1].order += 1
+                            prefix = f"{stack[-1].order}. "
+                            
+                        block = Text(parent=stack[-2].block, prefix=prefix)
+                        block.add_lines(line)
+                        stack[-1].block = block
+                        
+                # ----- OTHER and not equal: we create a new block
+                        
+                else:
+                    if line_type == 'ORDERED':
+                        prefix = "1. "
+                        
+                    block = Text(parent=stack[-2].parent, prefix=prefix)
+                    block.add_lines(line)
+                    stack[-1].block = block
+                    
+            else:
+                if line_type == "ORDERED":
+                    prefix = "1. "
+                
+                # ----- Indentation can be deeper or shallower
+                
+                deeper = indent > stack[-1].indent
+                
+                # ----- If deeper, create a child of the top of stack
+                
+                if deeper:
+                    block = Text(parent=stack[-1].block, prefix=prefix)
+                    
+                # ----- otherwise pop the stack
+                
+                else:
+                    # Back in the stack
+                    
+                    while stack[-1].indent >= indent:
+                        stack.pop()
+
+                    block = Text(parent=stack[-1].block, prefix=prefix)
+                        
+                # ----- stack and add the line
+                    
+                block.add_lines(line)
+                stack.append(Stacker(block, indent, line_type, order=1))
+                
+        # ---------------------------------------------------------------------------
+        # Create the sub sections
+        
+        stack = [(-1, self)] # Another stack
+        
+        for index, title in enumerate(titles):
+            
+            level = levels[index]
+            
+            if level == stack[-1][0]:
+                section = Section(stack[-2][1], title)
+                stack[-1] = (level, section)
+                
+            elif level > stack[-1][0]:
+                for i in range(stack[-1][0], level-1):
+                    stack.append((i, Section(stack[-1][1])))
+                
+                section = Section(stack[-1][1], title)
+                stack.append((level, section))
+                
+            else:
+                for i in range(level, stack[-1][0]+1):
+                    stack.pop()
+
+                section = Section(stack[-1][1], title)
+                stack.append((level, section))
+                
+            section.set_text(texts[index+1])
+            
+    # ------------------------------------------------------------------------------------------
+    # Text generation
+        
+    def gen_text(self):
+        indent = self.text_indent
+        
+        if self.title is not None:
+            yield f"\n{indent}{self.title}"
+            yield f"{indent}{'-'*len(self.title)}"
+        
+        for line in super().gen_text():
+            yield line
+            
+    # ------------------------------------------------------------------------------------------
+    # Markdown output
+        
+    def gen_md(self):
+
+        if self.title is not None:
+            yield f"\n{'#' * (self.depth+1)} {self.title}\n"
+
+        for line in super().gen_md():
+            yield line
+            
+# ----------------------------------------------------------------------------------------------------
+# Doc: a Section with generations commmands
+            
+            
+class Doc(Section):
+    def __init__(self):
+        super().__init__()
+        self.base_indent = "    "
+        self.references = {}
+        self.md_root    = ""
+        self.md_images_ = "images/" # Relative to root
+        
+    @property
+    def images_path(self):
+        if self.md_images_[0] == "/":
+            return self.md_images_
+        else:
+            return self.md_root + self.md_images_
+    
+        
+    def solve_link(self, link):
+        
+        words = link.split(":")
+        if len(words) == 1:
+            return link
+        
+        words[0] = words[0].strip()
+        words[1] = words[1].strip()
+        
+        
+        if words[0].lower() == 'ref':
+            solved = self.references.get(words[1])
+            if solved is None:
+                raise RuntimeError(f"Link error in : '{link}'': The reference '{words[1]}' doesn't exist:\n{self.references}")
+            return solved
+        
+        if words[0].lower() == 'section':
+            section = self.get_section(words[1])
+            if section is None:
+                raise RuntimeError(f"Link error in : '{link}'': The section path '{words[1]}' doesn't exist:\n{self.tree()}")
+                
+        if words[0].lower() in ['image', 'img']:
+            return self.images_path + words[1]
+                
+        return link
+            
+            
+            
+            
+            
+            
+            
+            
+            
+text = """
+        Introduction text
+        
+        See: [The link](ref:foo) or [toto](ref:  python   ), image = ![Image](image.png)
+        See: <img src="toto.png"> or [toto](ref:python), image = ![Image](image.png)
+        
+        
+        Arguments
+        =========
+            - self
+            - factor: float
+              Factor comment
+              
+        Sub section
+        -----------
+            I'm here
+            
+                
+        Returns
+        -------
+            - Float
+            
+              See [Sub](section:Arguments.Sub section)
+        """
+        
+doc = Doc()
+doc.references["foo"] = "Bar"
+doc.references["python"] = "http://python.org"
+
+doc.set_text(text)
+
+
+if False:
+    print()
+    print("TEXT")
+    print("----")
+    for line in doc.gen_text():
+        print(line)
+    
+if True:
+    print()
+    print("MARKDONW")
+    print("--------")
+    for line in doc.gen_md():
+        print(line)
+
+
         
         
