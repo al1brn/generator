@@ -227,6 +227,8 @@ logger.setLevel(logging.INFO)
 
 from generator import gen_sockets as gsock
 from generator import gen_doc as gd
+from generator.documentation import Doc, Section, Text
+
 
 
 import importlib
@@ -598,6 +600,47 @@ class Arguments(list):
     # ---------------------------------------------------------------------------
     # Generate the comments in a node call
     
+    def documentation(self):
+        
+        sections = {"Sockets": [], "Parameters": [], "Fixed parameters": []}
+        
+        for arg in self:
+            
+            section = None
+            if arg.arg_type == 'OTHER':
+                if arg.header_str == "":
+                    s = arg.call_str
+                    section = sections["Fixed parameters"]
+                else:
+                    s = arg.header_str
+                    section = sections[ "Parameters"]
+                    
+                if s == "":
+                    continue
+                
+                section.append(s.replace("=", ":"))
+
+            else:
+                scomment = arg.scomment
+                if scomment == "":
+                    continue
+            
+                if arg.is_socket:
+                    sections["Sockets"].append(scomment)
+                elif arg.is_param:
+                    if arg.is_fixed:
+                        sections["Fixed parameters"].append(scomment)
+                    else:
+                        sections["Parameters"].append(scomment)
+                        
+        text = ""
+        for section, lst in sections.items():
+            if lst:
+                lst.insert(0, f"## {section}")
+                text += "\n    - ".join(lst)
+                
+        return text
+        
     def comment_section(self, section):
         
         for arg in self:
@@ -630,41 +673,7 @@ class Arguments(list):
                     
             lst = sect.get_lists(align_char=':')[0]
             lst.add_item(gd.Text(scomment))
-            
         
-    def gen_comment_OLD(self, _i_):
-        
-        ok_sockets = True
-        ok_params  = True
-        ok_fixed   = False
-        for arg in self:
-            if arg.is_socket:
-                if ok_sockets:
-                    yield _0_
-                    yield _i_ + "Sockets arguments"
-                    yield _i_ + "-----------------"
-                    ok_sockets = False
-                yield _i_ + _indent_ + arg.scomment
-
-            if arg.is_param:
-                if arg.is_fixed:
-                    ok_fixed = True
-                else:
-                    if ok_params:
-                        yield _0_
-                        yield _i_ + "Parameters arguments"
-                        yield _i_ + "--------------------"
-                        ok_params = False
-                    yield _i_ + _indent_ + arg.scomment
-                
-        if ok_fixed:
-            yield _0_
-            yield _i_ + "Fixed parameters"
-            yield _i_ + "----------------"
-
-            for arg in self:
-                if arg.is_param and arg.is_fixed:
-                    yield _i_ + _indent_ + arg.scomment
 
 # ====================================================================================================
 # Socket wrapper
@@ -1021,6 +1030,19 @@ class WNode:
                     s += '_'
                 s += w
         return s
+    
+    # ---------------------------------------------------------------------------
+    # Blender reference
+
+    @property
+    def blender_python_ref(self):
+        return f"https://docs.blender.org/api/current/bpy.types.{self.bl_idname}.html"
+    
+    @property
+    def blender_ref(self):
+        name = self.bnode.name.lower().replace(' ', '_')
+        return f"https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/material/{name}.html"
+    
     
     # ---------------------------------------------------------------------------
     # Set parameters
@@ -1520,6 +1542,19 @@ generated_sockets = []
 
 
 # ----------------------------------------------------------------------------------------------------
+# Package documentation
+
+package_doc = Doc()
+package_doc.md_folder = "docs"
+package_doc.references['index'] = "/docs/index.md"
+
+sockets_doc = Section(package_doc, "sockets")
+sockets_doc.md_folder = "sockets"
+
+nodes_doc   = Section(package_doc, "nodes")
+nodes_doc.md_folder = "nodes"
+
+# ----------------------------------------------------------------------------------------------------
 # Generate the classes
 # 
 # When a classes is created, it update the nodes it uses
@@ -1552,6 +1587,10 @@ def create_data_sockets(fpath):
         
         # ----------------------------------------------------------------------------------------------------
         # Markdown version of the class documentation
+        
+        sockets_doc.add_section(class_gen.class_doc)
+        
+        # ----- OLD
         
         fmd = fpath + f"docs/sockets/{class_gen.class_name}.md"
         with open(fmd, 'w') as fd:
@@ -1621,7 +1660,7 @@ def create_nodes(fpath):
 # Generate the nodes module
                 
 def create_geonodes(fpath):
-
+    
     # ---------------------------------------------------------------------------
     # data sockets classes
     
@@ -1631,6 +1670,23 @@ def create_geonodes(fpath):
     # nodes.py
 
     create_nodes(fpath)
+
+    # ---------------------------------------------------------------------------
+    # Documentation
+    
+    for section in sockets_doc:
+        
+        #print("MDing:", section.title)
+        
+        fname = fpath + section.file_link
+        
+        with open(fname, 'w') as f:
+            for line in section.gen_text(True):
+                f.write(line + "\n")
+
+    
+    
+    
     
     # ---------------------------------------------------------------------------
     #Index

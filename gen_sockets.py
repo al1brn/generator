@@ -7,6 +7,7 @@ Created on Fri May 13 14:49:27 2022
 """
 
 from generator import gen_doc as gd
+from generator.documentation import Doc, Section, Text
 
 def indent_set(depth=0):
     _indent_ = "    "
@@ -261,10 +262,53 @@ class NodeCall:
                     sep = ", "
                 ret_str += "]"
                 
-        node_link = gd.Link(self.wnode.node_name, f"../nodes/{self.wnode.node_name}.md")
+        if False:
+            node_link = f"[{self.wnode.node_name}](section:nodes/{self.wnode.node_name})"
+            return f"- [{self.meth_name}](section:{self.meth_name}) : {node_link}, {ret_str}"
         
-        return gd.Text(gd.Link(f"**{self.meth_name}**", f"#{gd.Section.title_tag(self.meth_name)}"), ":", node_link, ret_str)
+        else:
+            node_link = gd.Link(self.wnode.node_name, f"../nodes/{self.wnode.node_name}.md")
+            return gd.Text(gd.Link(f"**{self.meth_name}**", f"#{gd.Section.title_tag(self.meth_name)}"), ":", node_link, ret_str)
     
+    @property
+    def line_doc(self):
+        
+        unames = self.wnode.output_unames(self.fixed)
+        
+        if self.family == 'ATTRIBUTE':
+            
+            index = self.output_index
+            ret_str = f"{unames[list(unames)[index]]} = {self.capture_meth}(domain='{self.domain}')"
+            if len(unames) > 1:
+                ret_str += f".{list(unames)[index]}"
+            
+        elif len(unames) == 0:
+            ret_str = "None"
+            
+        elif len(unames) == 1:
+            uname = list(unames)[0]
+            ret_str = f"{uname} ({unames[uname]})"
+            
+        elif len(unames) == 2 and self.stack:
+            uname = list(unames)[1]
+            ret_str = f"{uname} ({unames[uname]})"
+            
+        else:
+            if self.family == 'PROPERTY' and not self.is_main_prop:
+                uname = list(unames.keys())[self.output_index]
+                ret_str = f"{uname} ({unames[uname]}) = {self.main_prop_name}.{uname}"
+                
+            else:
+                ret_str = "Sockets      ["
+                sep = ""
+                for uname, class_name in unames.items():
+                    ret_str += f"{sep}{uname} ({class_name})"
+                    sep = ", "
+                ret_str += "]"
+                
+        node_link = f"[{self.wnode.node_name}](section:nodes/{self.wnode.node_name})"
+        return f"- [{self.meth_name}](#{self.meth_name.lower()}) : {node_link}, {ret_str}"
+
     
     # ====================================================================================================
     # Generate a call
@@ -411,6 +455,86 @@ class NodeCall:
         # ----------------------------------------------------------------------------------------------------
         # Comment
         
+        if family == 'PROPERTY':
+            sample = f"v = {class_name.lower()}.{meth_name}"
+            
+        elif family in ['CONSTRUCTOR', 'STATIC', 'CLASS']:
+            sample = f"v = {class_name}.{meth_name}({args.scall_demo})"
+            
+        else:
+            sample = f"v = {class_name.lower()}.{meth_name}({args.scall_demo})"
+            
+        if family == 'ATTRIBUTE':
+            sret = str(ret_unames[list(ret_unames)[self.output_index]])
+
+        else:
+            if len(ret_unames) == 0:
+                sret = "self"
+
+            elif len(ret_unames) == 1:
+                sret = str(ret_unames[list(ret_unames)[0]])
+            
+            else:
+                s = ", ".join([f"{uname} ({ret_unames[uname]})" for uname in ret_unames])
+                sret = f"Sockets [{s}]"
+        
+        if True:
+            section = Section(None, f"{meth_name}")
+            section.family = FAMILIES[self.family][1]
+            
+            text = f"""
+
+            > Node: [{self.wnode.node_name}](section:nodes/{self.wnode.node_name})
+            
+            <sub>go to: [top](#data-socket-{self.class_name.lower()}) [index](ref:index)
+            blender ref [{self.wnode.bl_idname}]({self.wnode.blender_python_ref})
+            node ref [{self.wnode.bnode.name}]({self.wnode.blender_ref}) </sub>
+                              
+            ```python
+            {sample}
+            ```
+            
+            Arguments
+            ---------
+                {args.documentation()}
+            
+            Node creation
+            -------------
+            
+            ```python
+            {snode_call}
+            ``` 
+
+            Returns
+            -------
+                {sret}
+            """
+            
+            # ----- Remove temporarily the section title
+            
+            section.set_text(text)
+            title = section.title
+            section.title = None
+
+            # ----- Loop on the line
+            
+            first = True
+            for line in section.gen_text(False):
+                if first:
+                    if line.strip() != "":
+                        yield _2_ + '""" ' + line.strip()
+                        first = False
+                else:
+                    yield _1_ + line
+            yield _2_ + '"""' + "\n"
+            
+            section.title = title
+            
+            data_class.class_doc.add_section(section)
+            
+
+        # ----- OLD                     
+
         doc = gd.Section(f"{meth_name}", level=0)
         doc.append(
             gd.Description("Node:", gd.Link(self.wnode.node_name, "../nodes/{self.node_name}.md"))
@@ -463,22 +587,26 @@ class NodeCall:
                     sep = ", "
                 s += "]"
                 section.append(gd.Doc(s, depth=depth))
-                
+                    
         # ----- Done
-
-        first = True
-        for line in doc.gen_text():
-            if first:
-                yield _2_ + '""" ' + line
-                first = False
-            else:
-                yield _2_ + line
-                
-        yield _2_ + '"""' + "\n"
+        
+        if False:
+            first = True
+            for line in doc.gen_text():
+                if first:
+                    yield _2_ + '""" ' + line
+                    first = False
+                else:
+                    yield _2_ + line
+                    
+            yield _2_ + '"""' + "\n"
         
         # ----- Collect the documentation
         
         data_class.meths_doc[meth_name] = doc
+        
+        # ----- EO OLD
+        
     
         # ----------------------------------------------------------------------------------------------------
         # ----- Call and return
@@ -655,6 +783,21 @@ class DataClass:
         
         self.doc       = None # Built by build_doc method called when generating the source code
         self.meths_doc = {}   # Filled by each gen_call
+        
+        # ----- Class documentation
+        
+        self.class_doc = Section(parent=None, title=f"Data socket {class_name}")
+        self.class_doc.md_file = f"{self.class_name}.md"
+        
+        text = f"""
+        > Inherits from {self.super_class}
+        
+        <sub>go to [index](ref:index)</sub>
+        
+        """
+        
+        self.class_doc.set_text(text)
+        
         
         # ----------------------------------------------------------------------------------------------------
         # Add the multi classes methods
@@ -865,16 +1008,35 @@ class DataClass:
             yield _0_ + f"class {self.class_name}({self.super_class}):"
 
         # ----------------------------------------------------------------------------------------------------
-        # Comments
+        # Class documentation
         
         doc = self.build_doc()
         
-        first = True
-        indent = _1_ + '""" '
-        for line in doc.gen_text(100):
-            yield indent + line
-            indent = _1_
-        yield _1_ + '"""' + "\n"
+        if False:
+            first = True
+            indent = _1_ + '""" '
+            for line in doc.gen_text(100):
+                yield indent + line
+                indent = _1_
+            yield _1_ + '"""' + "\n"
+            
+        else:
+            for family in FAMILIES:
+                meths = sorted(self.methods(family), key=lambda nc: nc.meth_name)
+                if not meths:
+                    continue
+                
+                section = Section(self.class_doc, FAMILIES[family][1])
+                text = "\n".join([nc.line_doc for nc in meths])
+                section.set_text(text)
+            
+            first = True
+            indent = _1_ + '""" '
+            for line in self.class_doc.gen_text(False):
+                yield indent + line
+                indent = _1_
+            yield _1_ + '"""' + "\n"
+            
         
         # ----------------------------------------------------------------------------------------------------
         # Properties attributes

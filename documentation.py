@@ -7,6 +7,9 @@ Created on Fri Jun  3 16:40:15 2022
 """
 
 import re
+import logging
+
+logger = logging.getLogger()
 
 # ----------------------------------------------------------------------------------------------------
 # Block: a list of blocks
@@ -31,7 +34,7 @@ class Block(list):
     
     def __repr__(self):
         
-        s = f"{'    '*self.depth}<{type(self).__name__}, blocks={len(self)}>\n"
+        s = f"{'    '*self.depth()}<{type(self).__name__}, blocks={len(self)}>\n"
         for block in self:
             s += repr(block)
         return s
@@ -39,12 +42,19 @@ class Block(list):
     # ------------------------------------------------------------------------------------------
     # The depth of the block
 
-    @property
-    def depth(self):
-        if self.parent is None:
-            return 0
+    def depth(self, markdown=False):
+        if markdown:
+            if hasattr(self.md_file) and self.md_file is not None:
+                return 0
+            elif self.parent is None:
+                return 0
+            else:
+                return self.parent.depth(True) + 1
         else:
-            return 1 + self.parent.depth
+            if self.parent is None:
+                return 0
+            else:
+                return 1 + self.parent.depth(False)
         
     # ------------------------------------------------------------------------------------------
     # Access to the top block
@@ -60,31 +70,30 @@ class Block(list):
     def doc(self):
         doc = self.top
         return doc if isinstance(doc, Doc) else None
-
+    
+    
+    @property
+    def max_width(self):
+        doc = self.top
+        return doc.text_width if isinstance(doc, Doc) else 100
+    
     # ------------------------------------------------------------------------------------------
     # Text indentation for text output    
         
-    @property
-    def text_indent(self):
+    def text_indent(self, markdown=False):
         doc = self.doc
-        return ("    " if doc is None else doc.base_indent) * self.depth
+        if markdown:
+            return ""
+        else:
+            return ("    " if doc is None else doc.base_indent) * self.depth(False)
 
     # ------------------------------------------------------------------------------------------
     # Text output
         
-    def gen_text(self):
+    def gen_text(self, markdown=False):
         for block in self:
-            for line in block.gen_text():
+            for line in block.gen_text(markdown=markdown):
                 yield line
-                
-    # ------------------------------------------------------------------------------------------
-    # Markdown output
-        
-    def gen_md(self):
-        for block in self:
-            for line in block.gen_md():
-                yield line
-                
                 
 # ----------------------------------------------------------------------------------------------------
 # Text: a list of lines
@@ -95,12 +104,18 @@ class Text(Block):
     
     def __init__(self, parent=None, prefix=None):
         super().__init__(parent)
-        self.prefix = "" if prefix is None else prefix
+        if prefix is None:
+            self.prefix = ""
+        elif prefix[-1] == " ":
+            self.prefix = prefix
+        else:
+            self.prefix = prefix + " "
+        
         self.lines  = []
         
     def __repr__(self):
         lines = [line[:10] for line in self.lines]
-        s = f"{'    '*self.depth}<Text, blocks: {len(self)}, lines: {len(self.lines)}, prefix='{self.prefix}'> {lines}\n"
+        s = f"{'    '*self.depth()}<Text, blocks: {len(self)}, lines: {len(self.lines)}, prefix='{self.prefix}'> {lines}\n"
         for block in self:
             s += repr(block)
         return s
@@ -120,29 +135,12 @@ class Text(Block):
         return link if doc is None else doc.solve_link(link)
 
     # ------------------------------------------------------------------------------------------
-    # Text output
-    
-    def gen_text(self):
-        indent = self.text_indent
-        first  = True
-        for line in self.lines:
-            if first:
-                yield f"{indent}{self.prefix}{line}"
-                indent += " " * len(self.prefix)
-                first = False
-            else:
-                yield f"{indent}{line}"
-                
-        for line in super().gen_text():
-            yield line
-            
-    # ------------------------------------------------------------------------------------------
     # Markdown output
         
-    def gen_md(self):
+    def gen_text(self, markdown=False):
         
         # ---------------------------------------------------------------------------
-        # Replace a link by a solved link
+        # Markdown: replace a link by a solved link
         
         def solve(match):
             start = match.group(1)
@@ -153,35 +151,50 @@ class Text(Block):
             
         def solve_src(match):
             return match.group(1) + self.solve_link("image:" + match.group(2))
+
+        # ---------------------------------------------------------------------------
+        # Text: suppress the link
         
-        indent = ""
+        def suppress(match):
+            return match.group(1)
 
         # ------------------------------------------------------------
         # Loop on the lines
         
+        indent = self.text_indent(markdown)
         first  = True
+
         for line in self.lines:
+            
             
             # ----- Solve the image links
 
-            # Markdown syntax
-            
-            line = re.sub(r"(!?\[[^\]]+\]\()([^)]+)", solve, line)
-            
-            # Html syntax
+            if markdown:
 
-            line = re.sub(r'(<img\s+.*src\s*=\s*")([^"]+)', solve_src, line)
+                # Markdown syntax
+                
+                line = re.sub(r"(!?\[[^\]]+\]\()([^)]+)", solve, line)
+                
+                # Html syntax
+    
+                line = re.sub(r'(<img\s+.*src\s*=\s*")([^"]+)', solve_src, line)
+                
+            else:
+                
+                line = re.sub(r"!?\[([^\]]+)\]\([^)]+\)", suppress, line)
+                
             
             # ----- Output
             
             if first:
                 yield f"{indent}{self.prefix}{line}"
                 first = False
-                indent = " " * len(self.prefix)
+                indent += " " * len(self.prefix)
+                    
             else:
                 yield f"{indent}{line}"
                 
-        for line in super().gen_md():
+        for line in super().gen_text(markdown):
             yield line
             
                 
@@ -198,12 +211,17 @@ class Section(Block):
         self.title = title
         self.tag_  = tag
         
+        # ----- md properties
+        
+        self.md_folder_ = None
+        self.md_file_   = None
+        
     # ------------------------------------------------------------------------------------------
     # Tag property  
 
     @staticmethod
     def build_tag(title):
-        return None if title is None else title.lower().replace(' ', '-').replace('.', '_')
+        return None if title is None else title.lower().replace(' ', '-').replace('.', '_').replace(':', '')
     
     @property
     def tag(self):
@@ -214,13 +232,107 @@ class Section(Block):
         self.tag_ = value
         
     # ------------------------------------------------------------------------------------------
+    # Add text
+    
+    def add_lines(self, *lines, prefix=None):
+        
+        new = len(self) == 0 or prefix is not None
+        if new:
+            text = Text(self, prefix)
+        else:
+            text = self[-1]
+            
+        text.add_lines(*lines)
+        
+    # ------------------------------------------------------------------------------------------
+    # Get the section md_file
+    
+    @property
+    def md_file(self):
+        if self.md_file_ is None:
+            if self.parent is None:
+                return ""
+            else:
+                return self.parent.md_file
+        else:
+            return self.md_file_
+        
+    @md_file.setter
+    def md_file(self, value):
+        self.md_file_ = value
+        
+    # ------------------------------------------------------------------------------------------
+    # Get the section folder
+
+    @property
+    def md_folder(self):
+        if self.md_folder_ is None:
+            if self.parent is None:
+                return ""
+            else:
+                return self.parent.md_folder
+        else:
+            return self.md_folder_
+        
+    @md_folder.setter
+    def md_folder(self, value):
+        self.md_folder_ = value
+        
+    # ------------------------------------------------------------------------------------------
+    # Get the section path
+    
+    @property
+    def md_path(self):
+        if self.md_folder_ is None:
+            if self.parent is None:
+                return ""
+            else:
+                return self.parent.md_path
+            
+        elif self.parent is None:
+            return f"{self.md_folder_}/"
+        
+        else:
+            return f"{self.parent.md_path}{self.md_folder_}/"
+        
+    # ------------------------------------------------------------------------------------------
+    # Get the link to the file
+    
+    @property
+    def file_link(self):
+        return self.md_path + self.md_file
+
+    # ------------------------------------------------------------------------------------------
+    # The the link to this section
+    #
+    # If from_section is defined, can return an anchor
+    
+    def url(self, from_section=None):
+        file_link = self.file_link
+        stag = f"#{self.tag}"
+        if from_section is None or from_section.file_link != file_link:
+            return file_link + stag
+        else:
+            return stag
+        
+    @property
+    def md_depth(self):
+        if self.md_file_ is None:
+            if self.parent is None:
+                return 0
+            else:
+                return self.parent.md_depth + 1
+        else:
+            return 0
+        
+    # ------------------------------------------------------------------------------------------
     # Access to the top section through path syntax:
     #
     # Classes reference.class Node.__init__ : section "__init__" in section "class Node" in "Classes reference"
         
     def get_section(self, path, use_tag = False):
         
-        tags = path.split('.', 1)
+        tags = path.split('/', 1)
         found = None
         for block in self:
             
@@ -246,9 +358,26 @@ class Section(Block):
         return None
     
     # ------------------------------------------------------------------------------------------
+    # The sections
+    
+    def add_section(self, section):
+        section.parent = self
+        self.append(section)
+        return section
+    
+    def get_sections(self, sort=False):
+        sections = {}
+        for block in self:
+            if isinstance(block, Section):
+                sections[block.tag] = section
+                
+        if sort:
+            return {k: sections[k] for k in sorted(sections)}
+        else:
+            return sections
+    
+    # ------------------------------------------------------------------------------------------
     # Implementation file
-    
-    
     
     @property
     def writing_folder(self):
@@ -258,6 +387,51 @@ class Section(Block):
     @property
     def get_link(self):
         pass
+    
+    # ------------------------------------------------------------------------------------------
+    # Table of contents
+    # Only mark down
+    
+    def gen_toc(self, depth=1, sort=False, classify=None, mark_down=True):
+        
+        sections = self.sections(sort=sort)
+        
+        if classify is None:
+            for tag, section in sections.items():
+                yield f"- [{section.title}]({section.url(self)})"
+                if depth > 1:
+                    for line in section.gen_toc(depth=depth-1, sort=sort):
+                        yield "  " + line
+            return
+        
+        classified = {}
+        if isinstance(classify, str):
+            attr = classify
+        elif isinstance(classify, (list, tuple)) and len(classify) == 2:
+            attr = classify[0]
+            for v in classify[1]:
+                classified[v] = []
+        else:
+            raise RuntimeError(f"Classify argument must be a string or a couple (string, list)")
+        
+        for section in sections:
+            if hasattr(section, attr):
+                name = getattr(self, attr)
+            else:
+                name = "Other"
+                
+            if classified.get(name) is None:
+                classified[name] = [section]
+            else:
+                classified[name].append(section)
+            
+        for name, sects in classified:
+            yield f"- {name}"
+            for section in sects:
+                yield f"  - [section.title](section.url(self))"
+                if depth > 1:
+                    for line in section.gen_toc(depth=depth-1, sort=sort):
+                        yield "    " + line
         
     
     
@@ -265,7 +439,7 @@ class Section(Block):
     # Tree of sections (for debug)
     
     def tree(self, mode=None):
-        s = "    " * self.depth + str(self.title) + "\n"
+        s = "    " * self.depth() + str(self.title) + "\n"
         for block in self:
             if isinstance(block, Section):
                 s += block.tree(mode=mode)
@@ -279,7 +453,7 @@ class Section(Block):
         # ---------------------------------------------------------------------------
         # Split in sections
         
-        txt_title_pat = re.compile(r"\s*(.+)\n\s*([-=]+)\n")
+        txt_title_pat = re.compile(r"\s*(.+)\s*\n\s*([-=]+)\s*\n")
         md_title_pat  = re.compile(r"\s*(#+)\s(.*)")
         
         # Text format
@@ -479,26 +653,20 @@ class Section(Block):
     # ------------------------------------------------------------------------------------------
     # Text generation
         
-    def gen_text(self):
-        indent = self.text_indent
+    def gen_text(self, markdown=False):
+        indent = self.text_indent(markdown)
         
         if self.title is not None:
-            yield f"\n{indent}{self.title}"
-            yield f"{indent}{'-'*len(self.title)}"
+            if markdown:
+                yield f"\n{'#' * (self.md_depth+1)} {self.title}\n"
+            else:
+                yield "\n"
+                yield f"{indent}{self.title}"
+                yield f"{indent}{'-'*len(self.title)}"
         
-        for line in super().gen_text():
+        for line in super().gen_text(markdown):
             yield line
             
-    # ------------------------------------------------------------------------------------------
-    # Markdown output
-        
-    def gen_md(self):
-
-        if self.title is not None:
-            yield f"\n{'#' * (self.depth+1)} {self.title}\n"
-
-        for line in super().gen_md():
-            yield line
             
 # ----------------------------------------------------------------------------------------------------
 # Doc: a Section with generations commmands
@@ -507,7 +675,10 @@ class Section(Block):
 class Doc(Section):
     def __init__(self):
         super().__init__()
+        
         self.base_indent = "    "
+        self.text_width  = 100
+        
         self.references = {}
         self.md_root    = ""
         self.md_images_ = "images/" # Relative to root
@@ -533,18 +704,21 @@ class Doc(Section):
         if words[0].lower() == 'ref':
             solved = self.references.get(words[1])
             if solved is None:
-                raise RuntimeError(f"Link error in : '{link}'': The reference '{words[1]}' doesn't exist:\n{self.references}")
+                logger.error(f"Link error in '{link}': The reference '{words[1]}' doesn't exist.")
             return solved
         
         if words[0].lower() == 'section':
             section = self.get_section(words[1])
             if section is None:
-                raise RuntimeError(f"Link error in : '{link}'': The section path '{words[1]}' doesn't exist:\n{self.tree()}")
+                logger.error(f"Link error in : '{link}': The section named '{words[1]}' doesn't exist.\nDoc sections: {[section.title for section in self]}")
                 
         if words[0].lower() in ['image', 'img']:
             return self.images_path + words[1]
                 
         return link
+    
+    
+    
             
             
             
@@ -579,27 +753,29 @@ text = """
               See [Sub](section:Arguments.Sub section)
         """
         
-doc = Doc()
-doc.references["foo"] = "Bar"
-doc.references["python"] = "http://python.org"
-
-doc.set_text(text)
-
-
-if False:
-    print()
-    print("TEXT")
-    print("----")
-    for line in doc.gen_text():
-        print(line)
-    
-if True:
-    print()
-    print("MARKDONW")
-    print("--------")
-    for line in doc.gen_md():
-        print(line)
-
-
+def test():
         
+    doc = Doc()
+    doc.references["foo"] = "Bar"
+    doc.references["python"] = "http://python.org"
+    
+    doc.set_text(text)
+    
+    
+    if True:
+        print()
+        print("TEXT")
+        print("----")
+        for line in doc.gen_text():
+            print(line)
+        
+    if True:
+        print()
+        print("MARKDONW")
+        print("--------")
+        for line in doc.gen_text(True):
+            print(line)
+
+
+#test()        
         
