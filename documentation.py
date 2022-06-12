@@ -8,8 +8,72 @@ Created on Fri Jun  3 16:40:15 2022
 
 import re
 import logging
+import pprint
 
 logger = logging.getLogger()
+
+# ----------------------------------------------------------------------------------------------------
+# Utilities to remove a python source block ``` ... ``` from a text:
+#
+# tk, sources = tokenize_python(text)
+# utk = untokenize_python(tk, sources)
+#
+# print("Back to initial text:", utk == text)
+#
+
+def tokenize_python(text):
+
+    sources = {}
+    def tokenize(m):
+        
+        key = f"PYTHON {len(sources)-1}"
+        
+        # ----- source lines
+        
+        source = m.group(1)
+        lines  = source.split("\n")
+        while lines[0].strip() == "":
+            lines.remove(lines[0])
+
+        if lines[0].strip().startswith("```python"):
+            strips     = [lines[0].strip()]
+            lines[0]   = strips[0]
+            
+            indents    = [99]
+            for i in range(1, len(lines)):
+                strips.append(lines[i].strip())
+                if strips[-1]:
+                    indents.append(lines[i].find(strips[-1][0]))
+                else:
+                    indents.append(99)
+                    
+            min_indent = min(indents)
+
+            if min_indent < 99:
+                for i in range(1, len(lines)):
+                    lines[i] = " " * (indents[i] - min_indent) + strips[i]
+            
+            source = "\n".join(["", ""] + lines)
+        
+        sources[key] = source
+        return f"<<{key}>>"
+
+    t = re.sub(r"(\s*```[^`]*```)", tokenize, text)
+    return t, sources
+
+def untokenize_python(text, sources):
+    
+    def back(m):
+        try:
+            return sources[m.group(1)]
+        except Exception as e:
+            print(f"Error when untokenizeing: {text}")
+            print("sources:")
+            pprint.pprint(sources)
+            raise e
+
+    return re.sub(r"\s*<<([^>]+)>>", back, text)
+
 
 # ----------------------------------------------------------------------------------------------------
 # Block: a list of blocks
@@ -83,7 +147,15 @@ class Block(list):
     def text_indent(self, markdown=False):
         doc = self.doc
         if markdown:
-            return ""
+            indent = ""
+            cur = self
+            while cur is not None:
+                cur = cur.parent
+                if isinstance(cur, Text):
+                    indent += "  "
+                else:
+                    return indent
+            return indent
         else:
             return ("    " if doc is None else doc.base_indent) * self.depth(False)
 
@@ -122,10 +194,17 @@ class Text(Block):
         
     # ------------------------------------------------------------------------------------------
     # Add lines
+    #
+    # The sources is an optional dictionary used to restore the source code if removed
+    # with tokenize_python
     
-    def add_lines(self, *lines):
+    def add_lines(self, *lines, sources=None):
         for line in lines:
-            self.lines.append(line)
+            if sources is None:
+                self.lines.append(line)
+            else:
+                for ul in untokenize_python(line, sources).split("\n"):
+                    self.add_lines(ul)
             
     # ------------------------------------------------------------------------------------------
     # solve a link
@@ -180,9 +259,7 @@ class Text(Block):
                 line = re.sub(r'(<img\s+.*src\s*=\s*")([^"]+)', solve_src, line)
                 
             else:
-                
                 line = re.sub(r"!?\[([^\]]+)\]\([^)]+\)", suppress, line)
-                
             
             # ----- Output
             
@@ -210,12 +287,32 @@ class Section(Block):
         super().__init__(parent)
         self.title = title
         self.tag_  = tag
+        self.id    = None
         
         # ----- md properties
         
         self.md_folder_ = None
         self.md_file_   = None
         
+    # ------------------------------------------------------------------------------------------
+    # From doc parser
+    
+    @classmethod
+    def FromParserDoc(cls, parent=None, prefix=None, pdoc=None):
+        
+        if not pdoc.is_class:
+            if pdoc.comment.strip() == "":
+                return None
+        
+        title = pdoc.name if prefix is None else f"{prefix} {pdoc.name}"
+        section = cls(parent = parent, title=title)
+        section.set_text(pdoc.comment)
+        
+        if pdoc.is_class:
+            for pdef in pdoc.funcs.values():
+                cls.FromParserDoc(parent=section, pdoc=pdef)
+        return section
+
     # ------------------------------------------------------------------------------------------
     # Tag property  
 
@@ -234,7 +331,7 @@ class Section(Block):
     # ------------------------------------------------------------------------------------------
     # Add text
     
-    def add_lines(self, *lines, prefix=None):
+    def add_lines(self, *lines, prefix=None, sources=None):
         
         new = len(self) == 0 or prefix is not None
         if new:
@@ -242,7 +339,7 @@ class Section(Block):
         else:
             text = self[-1]
             
-        text.add_lines(*lines)
+        text.add_lines(*lines, sources=sources)
         
     # ------------------------------------------------------------------------------------------
     # Get the section md_file
@@ -292,6 +389,9 @@ class Section(Block):
         elif self.parent is None:
             return f"{self.md_folder_}/"
         
+        elif self.md_folder == "":
+            return self.parent.md_path
+        
         else:
             return f"{self.parent.md_path}{self.md_folder_}/"
         
@@ -330,31 +430,16 @@ class Section(Block):
     #
     # Classes reference.class Node.__init__ : section "__init__" in section "class Node" in "Classes reference"
         
-    def get_section(self, path, use_tag = False):
+    def get_section(self, section_id):
         
-        tags = path.split('/', 1)
-        found = None
-        for block in self:
-            
-            if not isinstance(block, Section):
-                continue
-            
-            if block.tag is None:
-                continue
-            
-            if use_tag:
-                if block.tag == tags[0]:
-                    found = block
-            else:
-                if block.title == tags[0]:
-                    found = block
-                    
+        if section_id == self.id:
+            return self
+        
+        for section in self.get_sections():
+            found = section.get_section(section_id)
             if found is not None:
-                if len(tags) == 1:
-                    return found
-                else:
-                    return found.get_section(tags[1])
-                
+                return found
+
         return None
     
     # ------------------------------------------------------------------------------------------
@@ -369,12 +454,12 @@ class Section(Block):
         sections = {}
         for block in self:
             if isinstance(block, Section):
-                sections[block.tag] = section
+                sections[block.tag] = block
                 
         if sort:
-            return {k: sections[k] for k in sorted(sections)}
+            return [sections[k] for k in sorted(sections)]
         else:
-            return sections
+            return list(sections.values())
     
     # ------------------------------------------------------------------------------------------
     # Implementation file
@@ -392,13 +477,13 @@ class Section(Block):
     # Table of contents
     # Only mark down
     
-    def gen_toc(self, depth=1, sort=False, classify=None, mark_down=True):
+    def gen_toc(self, depth=1, sort=False, classify=None, markdown=True):
         
-        sections = self.sections(sort=sort)
+        sections = self.get_sections(sort=sort)
         
         if classify is None:
-            for tag, section in sections.items():
-                yield f"- [{section.title}]({section.url(self)})"
+            for section in sections:
+                yield f"- [{section.title}](/{section.file_link})"
                 if depth > 1:
                     for line in section.gen_toc(depth=depth-1, sort=sort):
                         yield "  " + line
@@ -428,9 +513,9 @@ class Section(Block):
         for name, sects in classified:
             yield f"- {name}"
             for section in sects:
-                yield f"  - [section.title](section.url(self))"
+                yield f"  - [{section.title}](/{section.link_file})"
                 if depth > 1:
-                    for line in section.gen_toc(depth=depth-1, sort=sort):
+                    for line in section.gen_toc(depth=depth-1, sort=sort, markdown=markdown):
                         yield "    " + line
         
     
@@ -450,11 +535,26 @@ class Section(Block):
     
     def set_text(self, text):
         
+        # ----- Remove the source code blocks
+        #
+        # Once the text is split in sections and lines, the untokenization is made:
+        #
+        # - For the introductory text, when setting the lines:
+        #   for line in texts[0]:
+        #        ...
+        #       block.add_lines(line, sources=sources)
+        #
+        # - For the sections texts, when sending the text to the section
+        #   section.set_text(untokenize_python(texts[index+1], sources))
+        #
+        
+        text, sources = tokenize_python(text)
+        
         # ---------------------------------------------------------------------------
         # Split in sections
         
         txt_title_pat = re.compile(r"\s*(.+)\s*\n\s*([-=]+)\s*\n")
-        md_title_pat  = re.compile(r"\s*(#+)\s(.*)")
+        md_title_pat  = re.compile(r"\n\s*(#+)\s(.*)")
         
         # Text format
         # -----------
@@ -478,7 +578,7 @@ class Section(Block):
             
         else:
     
-            for match in md_title_pat.finditer(text):
+            for match in md_title_pat.finditer("\n" + text):  # Add a leading \n because the md pattern searchs:  \n.....#
                 
                 titles.append(match.group(2))
                 levels.append(len(match.group(1)))
@@ -565,14 +665,14 @@ class Section(Block):
                 # ----- TEXT: always happened to the current block
                 
                 if line_type == 'TEXT':
-                    stack[-1].block.add_lines(line)
+                    stack[-1].block.add_lines(line, sources=sources)
                     
                 # ----- OTHER but equal: we create an new block for lists
                     
                 elif line_type == stack[-1].line_type:
                     
                     if line_type == 'EVIDENCE':
-                        stack[-1].block.add_lines(line)
+                        stack[-1].block.add_lines(line, sources=sources)
                     
                     else:
                         if line_type == 'ORDERED':
@@ -580,7 +680,7 @@ class Section(Block):
                             prefix = f"{stack[-1].order}. "
                             
                         block = Text(parent=stack[-2].block, prefix=prefix)
-                        block.add_lines(line)
+                        block.add_lines(line, sources=sources)
                         stack[-1].block = block
                         
                 # ----- OTHER and not equal: we create a new block
@@ -589,8 +689,8 @@ class Section(Block):
                     if line_type == 'ORDERED':
                         prefix = "1. "
                         
-                    block = Text(parent=stack[-2].parent, prefix=prefix)
-                    block.add_lines(line)
+                    block = Text(parent=stack[-2].block, prefix=prefix)
+                    block.add_lines(line, sources=sources)
                     stack[-1].block = block
                     
             else:
@@ -618,7 +718,7 @@ class Section(Block):
                         
                 # ----- stack and add the line
                     
-                block.add_lines(line)
+                block.add_lines(line, sources=sources)
                 stack.append(Stacker(block, indent, line_type, order=1))
                 
         # ---------------------------------------------------------------------------
@@ -648,7 +748,7 @@ class Section(Block):
                 section = Section(stack[-1][1], title)
                 stack.append((level, section))
                 
-            section.set_text(texts[index+1])
+            section.set_text(untokenize_python(texts[index+1], sources))
             
     # ------------------------------------------------------------------------------------------
     # Text generation
@@ -658,7 +758,12 @@ class Section(Block):
         
         if self.title is not None:
             if markdown:
-                yield f"\n{'#' * (self.md_depth+1)} {self.title}\n"
+                title = self.title
+                match = re.search("__(.+)__", title)
+                if match is not None:
+                    title = r"\_\_" + match.group(1) + r"\_\_"
+                    
+                yield f"\n{'#' * (self.md_depth+1)} {title}\n"
             else:
                 yield "\n"
                 yield f"{indent}{self.title}"
@@ -697,70 +802,38 @@ class Doc(Section):
         if len(words) == 1:
             return link
         
-        words[0] = words[0].strip()
-        words[1] = words[1].strip()
+        algo   = words[0].strip().lower()
         
+        ref    = words[1].strip().split('#')
+        sid    = ref[0].strip()
+        anchor = f"#{ref[1].lower().strip()}" if len(ref) == 2 else ""
         
-        if words[0].lower() == 'ref':
-            solved = self.references.get(words[1])
+        if algo == 'ref':
+            solved = self.references.get(sid)
             if solved is None:
                 logger.error(f"Link error in '{link}': The reference '{words[1]}' doesn't exist.")
-            return solved
+            return solved + anchor
         
-        if words[0].lower() == 'section':
-            section = self.get_section(words[1])
+        if words[0].lower() == 'id':
+            section = self.get_section(sid)
             if section is None:
                 logger.error(f"Link error in : '{link}': The section named '{words[1]}' doesn't exist.\nDoc sections: {[section.title for section in self]}")
+            return "/" + section.file_link + anchor
                 
         if words[0].lower() in ['image', 'img']:
-            return self.images_path + words[1]
+            return self.images_path + sid
+        
+        # Nothing
                 
         return link
     
     
-    
-            
-            
-            
-            
-            
-            
-            
-            
-            
-text = """
-        Introduction text
-        
-        See: [The link](ref:foo) or [toto](ref:  python   ), image = ![Image](image.png)
-        See: <img src="toto.png"> or [toto](ref:python), image = ![Image](image.png)
-        
-        
-        Arguments
-        =========
-            - self
-            - factor: float
-              Factor comment
-              
-        Sub section
-        -----------
-            I'm here
-            
-                
-        Returns
-        -------
-            - Float
-            
-              See [Sub](section:Arguments.Sub section)
-        """
-        
-def test():
-        
+def debug():
+
+    text= """ Test """
+
     doc = Doc()
-    doc.references["foo"] = "Bar"
-    doc.references["python"] = "http://python.org"
-    
     doc.set_text(text)
-    
     
     if True:
         print()
@@ -777,5 +850,5 @@ def test():
             print(line)
 
 
-#test()        
+#debug()        
         

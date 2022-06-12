@@ -6,7 +6,6 @@ Created on Fri May 13 14:49:27 2022
 @author: alain
 """
 
-from generator import gen_doc as gd
 from generator.documentation import Doc, Section, Text
 
 def indent_set(depth=0):
@@ -224,51 +223,7 @@ class NodeCall:
         return FAMILIES[self.family][2]
     
     # ----------------------------------------------------------------------------------------------------
-    # Class comment: line generated at class level
-    
-    @property
-    def class_comment(self):
-        
-        unames = self.wnode.output_unames(self.fixed)
-        
-        if self.family == 'ATTRIBUTE':
-            
-            index = self.output_index
-            ret_str = f"{unames[list(unames)[index]]} = {self.capture_meth}(domain='{self.domain}')"
-            if len(unames) > 1:
-                ret_str += f".{list(unames)[index]}"
-            
-        elif len(unames) == 0:
-            ret_str = "None"
-            
-        elif len(unames) == 1:
-            uname = list(unames)[0]
-            ret_str = f"{uname} ({unames[uname]})"
-            
-        elif len(unames) == 2 and self.stack:
-            uname = list(unames)[1]
-            ret_str = f"{uname} ({unames[uname]})"
-            
-        else:
-            if self.family == 'PROPERTY' and not self.is_main_prop:
-                uname = list(unames.keys())[self.output_index]
-                ret_str = f"{uname} ({unames[uname]}) = {self.main_prop_name}.{uname}"
-                
-            else:
-                ret_str = "Sockets      ["
-                sep = ""
-                for uname, class_name in unames.items():
-                    ret_str += f"{sep}{uname} ({class_name})"
-                    sep = ", "
-                ret_str += "]"
-                
-        if False:
-            node_link = f"[{self.wnode.node_name}](section:nodes/{self.wnode.node_name})"
-            return f"- [{self.meth_name}](section:{self.meth_name}) : {node_link}, {ret_str}"
-        
-        else:
-            node_link = gd.Link(self.wnode.node_name, f"../nodes/{self.wnode.node_name}.md")
-            return gd.Text(gd.Link(f"**{self.meth_name}**", f"#{gd.Section.title_tag(self.meth_name)}"), ":", node_link, ret_str)
+    # Line comment: used to build the list of methods in the class documentation
     
     @property
     def line_doc(self):
@@ -306,8 +261,8 @@ class NodeCall:
                     sep = ", "
                 ret_str += "]"
                 
-        node_link = f"[{self.wnode.node_name}](section:nodes/{self.wnode.node_name})"
-        return f"- [{self.meth_name}](#{self.meth_name.lower()}) : {node_link}, {ret_str}"
+        #node_link = f"[{self.wnode.node_name}](id:{self.wnode.node_name})"
+        return f"- [{self.meth_name}](#{self.meth_name.lower()}) : {ret_str}"
 
     
     # ====================================================================================================
@@ -478,135 +433,62 @@ class NodeCall:
                 s = ", ".join([f"{uname} ({ret_unames[uname]})" for uname in ret_unames])
                 sret = f"Sockets [{s}]"
         
-        if True:
-            section = Section(None, f"{meth_name}")
-            section.family = FAMILIES[self.family][1]
-            
-            text = f"""
+        section = Section(None, f"{meth_name}")
+        section.family = FAMILIES[self.family][1]
+        
+        text = f"""
 
-            > Node: [{self.wnode.node_name}](section:nodes/{self.wnode.node_name})
-            
-            <sub>go to: [top](#data-socket-{self.class_name.lower()}) [index](ref:index)
-            blender ref [{self.wnode.bl_idname}]({self.wnode.blender_python_ref})
-            node ref [{self.wnode.bnode.name}]({self.wnode.blender_ref}) </sub>
-                              
-            ```python
-            {sample}
-            ```
-            
-            Arguments
-            ---------
-                {args.documentation()}
-            
-            Node creation
-            -------------
-            
-            ```python
-            {snode_call}
-            ``` 
+        > Node: [{self.wnode.node_name}](id:{self.wnode.node_name})
+        
+        <sub>go to: [top](#data-socket-{self.class_name.lower()}) [index](ref:index)
+        blender ref [{self.wnode.bl_idname}]({self.wnode.blender_python_ref})
+        node ref [{self.wnode.bnode.name}]({self.wnode.blender_ref}) </sub>
+                          
+        ```python
+        {sample}
+        ```
+        
+        Arguments
+        ---------
+            {args.documentation()}
+        
+        Node creation
+        -------------
+        
+        ```python
+        from geondes import nodes
+        {snode_call}
+        ``` 
 
-            Returns
-            -------
-                {sret}
-            """
-            
-            # ----- Remove temporarily the section title
-            
-            section.set_text(text)
-            title = section.title
-            section.title = None
+        Returns
+        -------
+            {sret}
+        """
+        
+        # ----- Remove temporarily the section title
+        
+        section.set_text(text)
+        title = section.title
+        section.title = None
 
-            # ----- Loop on the line
-            
-            first = True
-            for line in section.gen_text(False):
-                if first:
-                    if line.strip() != "":
-                        yield _2_ + '""" ' + line.strip()
-                        first = False
-                else:
-                    yield _1_ + line
-            yield _2_ + '"""' + "\n"
-            
-            section.title = title
-            
-            data_class.class_doc.add_section(section)
-            
-
-        # ----- OLD                     
-
-        doc = gd.Section(f"{meth_name}", level=0)
-        doc.append(
-            gd.Description("Node:", gd.Link(self.wnode.node_name, "../nodes/{self.node_name}.md"))
-        )
+        # ----- Loop on the lines
         
-        doc.append(gd.Doc(gd.Link("Top", '#' + gd.Section.title_tag(f"Class {self.class_name}")), gd.Link("Index", "/docs/index.md")))
-        
-        
-        if family == 'PROPERTY':
-            sample = f"v = {class_name.lower()}.{meth_name}"
-            
-        elif family in ['CONSTRUCTOR', 'STATIC', 'CLASS']:
-            sample = f"v = {class_name}.{meth_name}({args.scall_demo})"
-            
-        else:
-            sample = f"v = {class_name.lower()}.{meth_name}({args.scall_demo})"
-        
-        doc.append(gd.Python(sample))
-        
-        # ----- Arguments
-        
-        section = doc.get_subsection("Arguments")
-        args.comment_section(section)
-        
-        # ----- Implementation
-        
-        section = doc.get_subsection("Node creation")
-        section.append(gd.Python(f"node = {snode_call}"))
-        
-        # ----- Returns
-        
-        section = doc.get_subsection("Returns")
-        depth = section.level + 1
-        
-        if family == 'ATTRIBUTE':
-            section.append(gd.Doc(str(ret_unames[list(ret_unames)[self.output_index]]), depth=depth))
-
-        else:
-            if len(ret_unames) == 0:
-                section.append(gd.Doc("self", depth=depth))
-
-            elif len(ret_unames) == 1:
-                section.append(gd.Doc(str(ret_unames[list(ret_unames)[0]]), depth=depth))
-            
-            else:
-                s = "Sockets ["
-                sep = ""
-                for uname in ret_unames:
-                    s += f"{sep}{uname} ({ret_unames[uname]})"
-                    sep = ", "
-                s += "]"
-                section.append(gd.Doc(s, depth=depth))
-                    
-        # ----- Done
-        
-        if False:
-            first = True
-            for line in doc.gen_text():
-                if first:
-                    yield _2_ + '""" ' + line
+        first = True
+        for line in section.gen_text(False):
+            if first:
+                if line.strip() != "":
+                    yield _2_ + '""" ' + line.strip()
                     first = False
-                else:
-                    yield _2_ + line
-                    
-            yield _2_ + '"""' + "\n"
+            else:
+                yield _1_ + line
+        yield _2_ + '"""' + "\n"
         
-        # ----- Collect the documentation
+        section.title = title
         
-        data_class.meths_doc[meth_name] = doc
-        
-        # ----- EO OLD
-        
+        data_class.class_doc.add_section(section)
+            
+
+
     
         # ----------------------------------------------------------------------------------------------------
         # ----- Call and return
@@ -769,7 +651,7 @@ class NodeCall:
         
 class DataClass:
     
-    def __init__(self, wnodes, class_name, super_class):
+    def __init__(self, wnodes, class_name, super_class, is_global=False):
         
         self.wnodes      = wnodes
         self.class_name  = class_name
@@ -777,24 +659,38 @@ class DataClass:
         
         self.methods_    = []
         
-        self.is_global   = False
-        
-        # ----- Documentation
-        
-        self.doc       = None # Built by build_doc method called when generating the source code
-        self.meths_doc = {}   # Filled by each gen_call
+        self.is_global   = is_global
         
         # ----- Class documentation
         
-        self.class_doc = Section(parent=None, title=f"Data socket {class_name}")
+        title = "geonodes functions" if self.is_global else f"Data socket {class_name}"        
+        self.class_doc = Section(parent=None, title=title)
+        
+        self.class_doc.id = f"{self.class_name}"
         self.class_doc.md_file = f"{self.class_name}.md"
         
-        text = f"""
-        > Inherits from {self.super_class}
-        
-        <sub>go to [index](ref:index)</sub>
-        
-        """
+        if self.is_global:
+            text = f"""
+            > global functions
+            
+            <sub>go to [index](ref:index)</sub>
+            
+            Example of use:
+            
+            ```python
+            import geonodes as gn
+            value = gn.Float(14.) # A float value
+            v = gn.sin(v)         # The sine of this value
+            ```
+            
+            """
+        else:
+            text = f"""
+            > Inherits from {self.super_class}
+            
+            <sub>go to [index](ref:index)</sub>
+            
+            """
         
         self.class_doc.set_text(text)
         
@@ -918,47 +814,6 @@ class DataClass:
         for templ, repl in replace.items():
             s = s.replace(templ, repl)
         return s
-    
-    # ----------------------------------------------------------------------------------------------------
-    # The class documentation
-    
-    def build_doc(self):
-        
-        self.doc = gd.Section(f"Class {self.class_name}", level=0)
-        if self.super_class != "":
-            self.doc.append(
-                gd.Description("Inherits from:", gd.BoldItalic(self.super_class))
-                )
-            
-        self.doc.append(gd.Doc(gd.Link("Index", "/docs/index.md")))
-        
-        for family, label in FAMILIES.items():
-            meths = self.methods(family)
-            if meths:
-                
-                section = self.doc.get_subsection(label[1])
-                lst = gd.List(align_char=':')
-                section.append(lst)
-                
-                meths.sort(key=lambda nc: nc.meth_name)
-                for nc in meths:
-                    lst.add_item(nc.class_comment)
-                    #lst.add_item(gd.Text(nc.class_comment))
-        
-        
-        return self.doc
-    
-    # ----------------------------------------------------------------------------------------------------
-    # The meths documentation
-    
-    def methods_documentation(self):
-        
-        doc = gd.Section("Methods reference", level=1)
-        names = list(self.meths_doc.keys())
-        names.sort()
-        for name in names:
-            doc.add_subsection(self.meths_doc[name])
-        return doc
 
     # ----------------------------------------------------------------------------------------------------
     # Generate the class source code
@@ -1010,32 +865,21 @@ class DataClass:
         # ----------------------------------------------------------------------------------------------------
         # Class documentation
         
-        doc = self.build_doc()
+        for family in FAMILIES:
+            meths = sorted(self.methods(family), key=lambda nc: nc.meth_name)
+            if not meths:
+                continue
+            
+            section = Section(self.class_doc, FAMILIES[family][1])
+            text = "\n".join([nc.line_doc for nc in meths])
+            section.set_text(text)
         
-        if False:
-            first = True
-            indent = _1_ + '""" '
-            for line in doc.gen_text(100):
-                yield indent + line
-                indent = _1_
-            yield _1_ + '"""' + "\n"
-            
-        else:
-            for family in FAMILIES:
-                meths = sorted(self.methods(family), key=lambda nc: nc.meth_name)
-                if not meths:
-                    continue
-                
-                section = Section(self.class_doc, FAMILIES[family][1])
-                text = "\n".join([nc.line_doc for nc in meths])
-                section.set_text(text)
-            
-            first = True
-            indent = _1_ + '""" '
-            for line in self.class_doc.gen_text(False):
-                yield indent + line
-                indent = _1_
-            yield _1_ + '"""' + "\n"
+        first = True
+        indent = _1_ + '""" '
+        for line in self.class_doc.gen_text(False):
+            yield indent + line
+            indent = _1_
+        yield _1_ + '"""' + "\n"
             
         
         # ----------------------------------------------------------------------------------------------------
@@ -1085,9 +929,7 @@ class DataClass:
 class GlobalGen(DataClass):
     
     def __init__(self, nodes):
-        super().__init__(nodes, 'functions', '')
-
-        self.is_global = True
+        super().__init__(nodes, 'functions', '', is_global=True)
 
         self.add_call('FUNCTION', 'FunctionNodeCompare',          meth_name="compare"             )
         self.add_call('FUNCTION', 'GeometryNodeStringJoin',       meth_name="join_strings"        )
@@ -1324,7 +1166,9 @@ class GeometryGen(DataClass):
         self.add_call('STACK', 'GeometryNodeTransform',            'transform'          )
         
         self.add_call('METHOD', 'GeometryNodeAttributeDomainSize',  'attribute_domain_size' )
-        self.add_call('METHOD', 'GeometryNodeAttributeRemove',      'attribute_remove'      )
+        #self.add_call('METHOD', 'GeometryNodeAttributeRemove',      'attribute_remove'      )
+        self.add_call('METHOD', 'GeometryNodeRemoveAttribute',      'remove_attribute'      )
+        
         self.add_call('METHOD', 'GeometryNodeSeparateGeometry',     'components'            )
         self.add_call('METHOD', 'GeometryNodeConvexHull',           'convex_hull'           )
         self.add_call('METHOD', 'GeometryNodeGeometryToInstance',   'to_instance'           )
