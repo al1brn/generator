@@ -28,34 +28,40 @@ def tokenize_python(text):
         
         key = f"PYTHON {len(sources)-1}"
         
+        if False:
         # ----- source lines
-        
-        source = m.group(1)
-        lines  = source.split("\n")
-        while lines[0].strip() == "":
-            lines.remove(lines[0])
-
-        if lines[0].strip().startswith("```python"):
-            strips     = [lines[0].strip()]
-            lines[0]   = strips[0]
             
-            indents    = [99]
-            for i in range(1, len(lines)):
-                strips.append(lines[i].strip())
-                if strips[-1]:
-                    indents.append(lines[i].find(strips[-1][0]))
-                else:
-                    indents.append(99)
-                    
-            min_indent = min(indents)
-
-            if min_indent < 99:
+            source = m.group(1)
+            lines  = source.split("\n")
+            while lines[0].strip() == "":
+                lines.remove(lines[0])
+    
+            if lines[0].strip().startswith("```python"):
+                strips     = [lines[0].strip()]
+                lines[0]   = strips[0]
+                
+                indents    = [99]
                 for i in range(1, len(lines)):
-                    lines[i] = " " * (indents[i] - min_indent) + strips[i]
+                    strips.append(lines[i].strip())
+                    if strips[-1]:
+                        indents.append(lines[i].find(strips[-1][0]))
+                    else:
+                        indents.append(99)
+                        
+                min_indent = min(indents)
+    
+                if min_indent < 99:
+                    for i in range(1, len(lines)):
+                        lines[i] = " " * (indents[i] - min_indent) + strips[i]
+                
+                source = "\n".join(["", ""] + lines)
             
-            source = "\n".join(["", ""] + lines)
+            sources[key] = source
         
-        sources[key] = source
+        else:
+            sources[key] = m.group(1)
+        
+        
         return f"<<{key}>>"
 
     t = re.sub(r"(\s*```[^`]*```)", tokenize, text)
@@ -595,6 +601,13 @@ class Section(Block):
             for i in range(len(levels)):
                 levels[i] -= min_level
             
+        # ---------------------------------------------------------------------------
+        # Untokenize the python source
+        
+        for i in range(len(texts)):
+            texts[i] = untokenize_python(texts[i], sources)
+        sources = None
+        
         # ---------------------------------------------------------------------------
         # Integrate the introductory text
         
