@@ -21,65 +21,54 @@ logger = logging.getLogger()
 # print("Back to initial text:", utk == text)
 #
 
-def tokenize_python(text):
+def tokenize(pattern, text):
 
-    sources = {}
-    def tokenize(m):
+    tokens = {}
+    def repl(m):
         
-        key = f"PYTHON {len(sources)-1}"
-        
-        if False:
-        # ----- source lines
-            
-            source = m.group(1)
-            lines  = source.split("\n")
-            while lines[0].strip() == "":
-                lines.remove(lines[0])
-    
-            if lines[0].strip().startswith("```python"):
-                strips     = [lines[0].strip()]
-                lines[0]   = strips[0]
-                
-                indents    = [99]
-                for i in range(1, len(lines)):
-                    strips.append(lines[i].strip())
-                    if strips[-1]:
-                        indents.append(lines[i].find(strips[-1][0]))
-                    else:
-                        indents.append(99)
-                        
-                min_indent = min(indents)
-    
-                if min_indent < 99:
-                    for i in range(1, len(lines)):
-                        lines[i] = " " * (indents[i] - min_indent) + strips[i]
-                
-                source = "\n".join(["", ""] + lines)
-            
-            sources[key] = source
-        
-        else:
-            sources[key] = m.group(1)
-        
-        
+        key = f"TOKEN {len(tokens)-1}"
+        tokens[key] = m.group(1)
         return f"<<{key}>>"
 
-    t = re.sub(r"(\s*```[^`]*```)", tokenize, text)
-    return t, sources
+    t = re.sub(pattern, repl, text)
 
-def untokenize_python(text, sources):
+    return t, tokens
+
+def untokenize(text, tokens):
     
     def back(m):
         try:
-            return sources[m.group(1)]
+            return tokens[m.group(1)]
         except Exception as e:
             print(f"Error when untokenizeing: {text}")
-            print("sources:")
-            pprint.pprint(sources)
+            print("tokens:")
+            pprint.pprint(tokens)
             raise e
 
-    return re.sub(r"\s*<<([^>]+)>>", back, text)
+    return re.sub(r"<<([^>]+)>>", back, text)
 
+def tokenize_python(text):
+    return tokenize(r"(```[^`]*```)", text)
+
+# ----------------------------------------------------------------------------------------------------
+# Utility: stick a text to the left
+
+def stick_left(text):
+    lines = text.split("\n")
+    indents = [99] * len(lines)
+    strips = [""] * len(lines)
+    for i, line in enumerate(lines):
+        match = re.search(r"(\s*)(.*)", line)
+        if match.group(2):
+            strips[i] = match.group(2)
+            indents[i] = len(match.group(1))
+    
+    min_indent = min(indents)
+    for i, line in enumerate(strips):
+        if line:
+            lines[i] = " "*(indents[i] - min_indent) + line
+    
+    return "\n".join(lines)
 
 # ----------------------------------------------------------------------------------------------------
 # Block: a list of blocks
@@ -201,15 +190,14 @@ class Text(Block):
     # ------------------------------------------------------------------------------------------
     # Add lines
     #
-    # The sources is an optional dictionary used to restore the source code if removed
-    # with tokenize_python
+    # tokens is an optional dictionary used to restore the tokenized blocks
     
-    def add_lines(self, *lines, sources=None):
+    def add_lines(self, *lines, tokens=None):
         for line in lines:
-            if sources is None:
+            if tokens is None:
                 self.lines.append(line)
             else:
-                for ul in untokenize_python(line, sources).split("\n"):
+                for ul in untokenize(line, tokens).split("\n"):
                     self.add_lines(ul)
             
     # ------------------------------------------------------------------------------------------
@@ -337,7 +325,7 @@ class Section(Block):
     # ------------------------------------------------------------------------------------------
     # Add text
     
-    def add_lines(self, *lines, prefix=None, sources=None):
+    def add_lines(self, *lines, prefix=None, tokens=None):
         
         new = len(self) == 0 or prefix is not None
         if new:
@@ -345,7 +333,7 @@ class Section(Block):
         else:
             text = self[-1]
             
-        text.add_lines(*lines, sources=sources)
+        text.add_lines(*lines, tokens=tokens)
         
     # ------------------------------------------------------------------------------------------
     # Get the section md_file
@@ -537,76 +525,29 @@ class Section(Block):
         return s
     
     # ------------------------------------------------------------------------------------------
-    # Initialization from text
+    # Two types of text can be set to a section
+    # - A text with sub sections
+    # - A text without sub sections
+    #
+    # The first type of text is split in:
+    # - Introduction
+    # - Section 1
+    #      section text
+    # - Section 2
+    #      text
+    #
     
-    def set_text(self, text):
-        
-        # ----- Remove the source code blocks
-        #
-        # Once the text is split in sections and lines, the untokenization is made:
-        #
-        # - For the introductory text, when setting the lines:
-        #   for line in texts[0]:
-        #        ...
-        #       block.add_lines(line, sources=sources)
-        #
-        # - For the sections texts, when sending the text to the section
-        #   section.set_text(untokenize_python(texts[index+1], sources))
-        #
-        
-        text, sources = tokenize_python(text)
-        
-        # ---------------------------------------------------------------------------
-        # Split in sections
-        
-        txt_title_pat = re.compile(r"\s*(.+)\s*\n\s*([-=]+)\s*\n")
-        md_title_pat  = re.compile(r"\n\s*(#+)\s(.*)")
-        
-        # Text format
-        # -----------
-        
-        cursor   = 0
-        levels   = []
-        titles   = []
-        texts    = []
-        
-        for match in txt_title_pat.finditer(text):
-            
-            titles.append(match.group(1))
-            levels.append(1 if match.group(2)[0] == "=" else 2)
-            texts.append(text[cursor:match.start()])
-            cursor = match.end()
-            
-        if cursor > 0:
-            texts.append(text[cursor:])
-            
-        # # md format
-            
-        else:
+    # ------------------------------------------------------------------------------------------
+    # Set intoduction: append text to the introduction text
     
-            for match in md_title_pat.finditer("\n" + text):  # Add a leading \n because the md pattern searchs:  \n.....#
-                
-                titles.append(match.group(2))
-                levels.append(len(match.group(1)))
-                texts.append(text[cursor:match.start()])
-                cursor = match.end()+1
-    
-            texts.append(text[cursor:])
-            
-        # ---------------------------------------------------------------------------
-        # Normalize the sections levels
+    def set_introduction(self, text):
         
-        if levels:
-            min_level = min(levels)
-            for i in range(len(levels)):
-                levels[i] -= min_level
-            
-        # ---------------------------------------------------------------------------
-        # Untokenize the python source
+        # ----- Tokenize python
+        # Note that it includes the leading spaces
         
-        for i in range(len(texts)):
-            texts[i] = untokenize_python(texts[i], sources)
-        sources = None
+        text, pythons = tokenize(r"(\s*```python[^`]*```)", text)
+        for k in pythons:
+            pythons[k] = stick_left(pythons[k])
         
         # ---------------------------------------------------------------------------
         # Integrate the introductory text
@@ -622,7 +563,7 @@ class Section(Block):
         
         # ----- Loop on the lines
         
-        for raw_line in texts[0].split("\n"):
+        for raw_line in text.split("\n"):
     
             pattern = r"(^\s*)((([->]\s)|(\d+\.\s))?(.*))"
             match = re.search(pattern, raw_line)
@@ -678,14 +619,14 @@ class Section(Block):
                 # ----- TEXT: always happened to the current block
                 
                 if line_type == 'TEXT':
-                    stack[-1].block.add_lines(line, sources=sources)
+                    stack[-1].block.add_lines(line, tokens=pythons)
                     
                 # ----- OTHER but equal: we create an new block for lists
                     
                 elif line_type == stack[-1].line_type:
                     
                     if line_type == 'EVIDENCE':
-                        stack[-1].block.add_lines(line, sources=sources)
+                        stack[-1].block.add_lines(line, tokens=pythons)
                     
                     else:
                         if line_type == 'ORDERED':
@@ -693,7 +634,7 @@ class Section(Block):
                             prefix = f"{stack[-1].order}. "
                             
                         block = Text(parent=stack[-2].block, prefix=prefix)
-                        block.add_lines(line, sources=sources)
+                        block.add_lines(line, tokens=pythons)
                         stack[-1].block = block
                         
                 # ----- OTHER and not equal: we create a new block
@@ -703,7 +644,7 @@ class Section(Block):
                         prefix = "1. "
                         
                     block = Text(parent=stack[-2].block, prefix=prefix)
-                    block.add_lines(line, sources=sources)
+                    block.add_lines(line, tokens=pythons)
                     stack[-1].block = block
                     
             else:
@@ -731,8 +672,74 @@ class Section(Block):
                         
                 # ----- stack and add the line
                     
-                block.add_lines(line, sources=sources)
+                block.add_lines(line, tokens=pythons)
                 stack.append(Stacker(block, indent, line_type, order=1))
+    
+
+    # ------------------------------------------------------------------------------------------
+    # Initialization from text
+    
+    def set_text(self, text):
+        
+        # ----- Remove the source code blocks
+        
+        text, sources = tokenize_python(text)
+        
+        # ---------------------------------------------------------------------------
+        # Split in sections
+        
+        txt_title_pat = re.compile(r"\s*(.+)\s*\n\s*([-=]+)\s*\n")
+        md_title_pat  = re.compile(r"\n\s*(#+)\s(.*)")
+        
+        # Text format
+        # -----------
+        
+        cursor   = 0
+        levels   = []
+        titles   = []
+        texts    = []
+        
+        for match in txt_title_pat.finditer(text):
+            
+            titles.append(match.group(1))
+            levels.append(1 if match.group(2)[0] == "=" else 2)
+            texts.append(text[cursor:match.start()])
+            cursor = match.end()
+            
+        if cursor > 0:
+            texts.append(text[cursor:])
+            
+        # # md format
+            
+        else:
+    
+            for match in md_title_pat.finditer("\n" + text):  # Add a leading \n because the md pattern searchs:  \n.....#
+                
+                titles.append(match.group(2))
+                levels.append(len(match.group(1)))
+                texts.append(text[cursor:match.start()])
+                cursor = match.end()+1
+    
+            texts.append(text[cursor:])
+            
+        # ---------------------------------------------------------------------------
+        # Normalize the sections levels
+        
+        if levels:
+            min_level = min(levels)
+            for i in range(len(levels)):
+                levels[i] -= min_level
+            
+        # ---------------------------------------------------------------------------
+        # Untokenize the python source
+        
+        for i in range(len(texts)):
+            texts[i] = untokenize(texts[i], sources)
+        del sources
+        
+        # ----- Set the introduction text
+        
+        self.set_introduction(texts[0])
                 
         # ---------------------------------------------------------------------------
         # Create the sub sections
@@ -761,7 +768,7 @@ class Section(Block):
                 section = Section(stack[-1][1], title)
                 stack.append((level, section))
                 
-            section.set_text(untokenize_python(texts[index+1], sources))
+            section.set_introduction(texts[index+1])
             
     # ------------------------------------------------------------------------------------------
     # Text generation
@@ -843,7 +850,36 @@ class Doc(Section):
     
 def debug():
 
-    text= """ Test """
+    text= """
+    Check the attributes
+    
+    Input attributes are initialized with a socket owner
+    
+    When finalizing the tree, we must check that the attribute actually feeds the expectedt geometry.
+    If it is not the case, we must insert a "Capture Attribute" node.
+    
+    The insertion is made with the following algorithm
+    
+    1. Check if capture is needed
+       - for each fed node:
+         - if the node has an input geometry:
+           - if the input geometry is the expected one:
+             - ok
+           - else
+             - insertion is needed
+         - else:
+           - continue exploration with the nodes fed by this node
+    
+    2. If insertion is needed
+       - Create the capture node
+       - Set the proper parameters
+       - Input geometry with the owning socket
+       - Output geometry to the sockets the owning socket was linked to
+       - Output attribute to the sockets the attribute was connected to
+    
+    
+    
+    """
 
     doc = Doc()
     doc.set_text(text)
@@ -863,5 +899,5 @@ def debug():
             print(line)
 
 
-#debug()        
+debug()        
         

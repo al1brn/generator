@@ -6,7 +6,9 @@ Created on Fri May 13 14:49:27 2022
 @author: alain
 """
 
+from datetime import date
 from generator.documentation import Doc, Section, Text
+
 
 def indent_set(depth=0):
     _indent_ = "    "
@@ -32,6 +34,19 @@ FAMILIES = {
     
     'FUNCTION'    : ('Function',         'Functions'             , False),
     }
+
+BOOL_MATH = {
+    'AND'    : 'b_and',
+    'OR'     : 'b_or',
+    'NOT'    : 'b_not',
+    'NAND'   : 'nand',
+    'NOR'    : 'nor',
+    'XNOR'   : 'xnor',
+    'XOR'    : 'xor',
+    'IMPLY'  : 'imply',
+    'NIMPLY' : 'nimply',
+}        
+
 
 MATH = {
     'ADD'                : ('add'                 , 'SAME'      ),
@@ -651,6 +666,23 @@ class NodeCall:
         
 class DataClass:
     
+    GENS = {
+        'FunctionNodeInputBool',
+        'FunctionNodeInputColor',
+        'FunctionNodeInputInt',
+        'FunctionNodeInputSpecialCharacters',
+        'FunctionNodeInputString',
+        'FunctionNodeInputVector',
+        'GeometryNodeGroup',
+        'GeometryNodeInputMaterial',
+        'GeometryNodeViewer',
+        'NodeFrame',
+        'NodeGroupInput',
+        'NodeGroupOutput',
+        'NodeReroute',
+        'ShaderNodeValue',
+    }
+    
     def __init__(self, wnodes, class_name, super_class, is_global=False):
         
         self.wnodes      = wnodes
@@ -778,8 +810,6 @@ class DataClass:
     
     def add_property(self, bl_idname, meth_name, settable=False, prop_names=None, **kwargs):
 
-        #self.methods_.append(NodeCall.Property(self.wnodes[bl_idname], self.class_name, meth_name, settable=settable, prop_names=prop_names, **kwargs))
-        
         # ----- The main property
         
         self.methods_.append(NodeCall.Property(self.wnodes[bl_idname], self.class_name, meth_name, **kwargs))
@@ -799,7 +829,6 @@ class DataClass:
         self.methods_.append(NodeCall.AttributeCapture(self.wnodes[bl_idname], self.class_name, attr_name, default_domain=default_domain))
         
     def add_attribute(self, bl_idname, meth_name, attr_name, domain='POINT'):
-        
         names = [meth_name] if type(meth_name) is str else meth_name
         for index, name in enumerate(names):
             self.methods_.append(NodeCall.Attribute(self.wnodes[bl_idname], self.class_name, name, attr_name=attr_name, domain=domain, output_index=index))
@@ -820,18 +849,32 @@ class DataClass:
         
     def gen_class(self):
         
+        import bpy
+        
         _indent_, _0_, _1_, _2_, _3_, _4_ = indent_set(-1 if self.is_global else 0)
         
         # ----------------------------------------------------------------------------------------------------
         # Generates module header
         
-        yield "import geonodes as gn\n"
-        yield "from geonodes.core import datasockets as dsock\n"
-        yield "from geonodes.nodes import nodes\n\n"
-        yield "import logging\n"
-        yield "logger = logging.Logger('geonodes')\n"
-        yield "\n"
+        QUOTES = '"""'
+        
+        yield f"""#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
+{QUOTES}
+Created on {date.today()}
+@author: Generated from generator module
+Blender version: {bpy.app.version_string}
+{QUOTES}
+
+import geonodes as gn
+from geonodes.core import datasockets as dsock
+from geonodes.nodes import nodes
+import logging
+logger = logging.Logger('geonodes')
+
+"""
+    
         # ----------------------------------------------------------------------------------------------------
         # Class header or list of function to import
         
@@ -903,6 +946,12 @@ class DataClass:
             yield f"\n{_1_}# {'-'*100}{_1_}# {label[1]}\n"
             
             for nc in meths:
+
+                # Register the node which is implemented
+                DataClass.GENS.add(nc.wnode.bl_idname)
+                
+                # Yield the lines
+
                 for line in nc.gen_call(self):
                     yield line
                     
@@ -936,6 +985,9 @@ class GlobalGen(DataClass):
         
         self.add_call('FUNCTION', 'GeometryNodeInputSceneTime', 'scene')
 
+        blid = 'FunctionNodeBooleanMath'
+        for op, meth_name in BOOL_MATH.items():
+            self.add_call('FUNCTION', blid, meth_name, blend_type=op)
         
         blid = 'ShaderNodeMath'
         for op, spec in MATH.items():
@@ -950,6 +1002,7 @@ class GlobalGen(DataClass):
         for op, meth_name in COLOR_MIX.items():
             self.add_call('FUNCTION', blid, f"color_{meth_name}", blend_type=op)
             
+
 
 # -----------------------------------------------------------------------------------------------------------------------------
 # Boolean

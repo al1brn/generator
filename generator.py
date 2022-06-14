@@ -217,13 +217,11 @@ Step 4
 
 """
 
+from datetime import date
+
 import bpy
 import mathutils
 from pprint import pprint, pformat
-
-import logging
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 from generator import gen_sockets as gsock
 from generator.documentation import Doc, Section, Text
@@ -1105,7 +1103,8 @@ class Parameter:
         try:
             setattr(self.wnode.bnode, self.name, v)
         except:
-            print(f"CAUTION: error when setting parameter {self.name} with value '{v}'")
+            pass
+            #print(f"CAUTION: error when setting parameter {self.name} with value '{v}'")
         
     def reset(self):
         if self.default is not None:
@@ -1190,6 +1189,14 @@ class WNode:
     
     @property
     def node_name(self):
+        
+        # ----- Some hacks
+        
+        if self.bnode.name == "ColorRamp":
+            return "ColorRamp"
+        
+        # ----- Standard
+        
         words = self.bnode.name.split(' ')
         s = ""
         for word in words:
@@ -1202,6 +1209,14 @@ class WNode:
     
     @property
     def function_name(self):
+
+        # ----- Some hacks
+        
+        if self.bnode.name == "ColorRamp":
+            return "color_ramp"
+        
+        # ----- Standard
+
         words = self.bnode.name.split(' ')
         s = ""
         for word in words:
@@ -1377,7 +1392,7 @@ class WNode:
         scall = f"node = nodes.{self.node_name}({s}"
         if s != "":
             scall += ", "
-        scall += "label=None)"
+        scall += "label=None, node_color=None)"
         
         section = Section(None, f"Node {self.node_name}")
         section.id = self.node_name
@@ -1439,7 +1454,9 @@ class WNode:
             new_section.set_text("\n- ".join(lst))
             
         new_section = Section(arg_section, "Node label")
-        new_section.set_text(f"- label : Geometry node display label (default=None)")
+        new_section.set_text(
+            f"- label : Geometry node display label (default=None)\n" +
+            f"- node_color : Geometry node color (default=None)")
             
         
         # ----- Data type dependant sockets
@@ -1527,14 +1544,14 @@ class WNode:
         s = args.sheader
         if s != "":
             yield ", " + s
-        yield ", label=None):\n"
+        yield ", label=None, node_color=None):\n"
     
         # ---------------------------------------------------------------------------
         # Call of super
         #
         # super().__init__(bl_idname, name, label)
         
-        yield _2_ + f"super().__init__('{self.bl_idname}', name='{self.bnode.name}', label=label)"
+        yield _2_ + f"super().__init__('{self.bl_idname}', name='{self.bnode.name}', label=label, node_color=node_color)"
 
         # ---------------------------------------------------------------------------
         # Parameters
@@ -1702,6 +1719,7 @@ btree_nodes.clear()
 
 class BNodes(dict):
     def __init__(self):
+        print("Collecting the available geometry nodes...")        
         super().__init__()
         for tp in dir(bpy.types):
             if tp.find('Legacy') < 0:
@@ -1712,6 +1730,11 @@ class BNodes(dict):
                 self[tp] = bnode
                 
 # ----- Create the geometry nodes
+
+print("-"*80)
+print("Generating nodes and sockets python from Blender geometry nodes")
+print(f"Blender version: {bpy.app.version_string}")
+print("")
                 
 BNODES = BNodes()
 
@@ -1724,7 +1747,6 @@ for bnode in BNODES.values():
 
 generated_nodes   = []
 generated_sockets = []
-
 
 # ----------------------------------------------------------------------------------------------------
 # Package documentation
@@ -1792,7 +1814,22 @@ def create_nodes(fpath):
     fname = fpath + "nodes/nodes.py"
     
     with open(fname, 'w') as f:
-        f.write("from geonodes.core.node import Node\n")
+        
+        QUOTES = '"""'
+        
+        f.write(f"""#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+{QUOTES}
+Created on {date.today()}
+@author: Generated from generator module
+Blender version: {bpy.app.version_string}
+{QUOTES}
+
+from geonodes.core.node import Node
+
+""")
+
         
         for bnode in BNODES.values():
             
@@ -1805,7 +1842,7 @@ def create_nodes(fpath):
             # ----- Some exclusion
             
             if wn.bl_idname in ['NodeReroute', 'NodeGroupInput', 'NodeGroupOutput', 'GeometryNodeViewer', 'NodeFrame']:
-                logger.info(f"Ignore: {wn.bl_idname}")
+                #print(f"Ignore: {wn.bl_idname}")
                 continue
             
             # ----- Write the node
@@ -1836,10 +1873,14 @@ def create_geonodes(fpath):
     # ---------------------------------------------------------------------------
     # data sockets classes
     
+    print("Creating data sockets...")
+    
     create_data_sockets(fpath)
 
     # ---------------------------------------------------------------------------
     # nodes.py
+
+    print("Creating geometry nodes from Blender...")
 
     create_nodes(fpath)
 
@@ -1861,7 +1902,11 @@ def create_geonodes(fpath):
         section.md_file = f"{name}.md"
     
     
+    ds_doc = Parser.FromFile(fpath + "core/datasockets.py").documentation()
+    
     # ----- Data sockets
+    
+    print("Data sockets documentation...")
     
     for section in sockets_doc:
         
@@ -1871,6 +1916,8 @@ def create_geonodes(fpath):
                 f.write(line + "\n")
                 
     # ----- Nodes
+
+    print("Nodes documentation...")
 
     for section in nodes_doc:
         
@@ -1889,6 +1936,8 @@ def create_geonodes(fpath):
                 f.write(line + "\n")
                 
     # ----- Index
+
+    print("Index...")
     
     fname = fpath + f"docs/index.md"
     with open(fname, 'w') as f:
@@ -1899,7 +1948,23 @@ def create_geonodes(fpath):
             
             for line in section.gen_toc(depth=1, sort=True, classify=None, markdown=True):
                 f.write(line + "\n")
+                
+    # ----- Implemented nodes
     
+    print("Done\n")
+    
+    print("Nodes not implemented as socket methods:")
+    count = 0
+    for bnode in BNODES.values():
+        if bnode.bl_idname not in gsock.DataClass.GENS:
+            print(f"    {bnode.bl_idname:40s}: '{bnode.name}'")
+            count += 1
+    if count == 0:
+        print("   all (ok")
+    else:
+        print(f"\n   NOTE: Check if the {count} node{'s' if count > 1 else ''} should be implemented as methods.\n")
+        
+    print('Generation complemented')
     
     return
     
@@ -1934,7 +1999,7 @@ def create_geonodes(fpath):
     # ---------------------------------------------------------------------------
     # Done
     
-    logger.info("geondes files generated")
+    print("geondes files generated")
     
 
     
