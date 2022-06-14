@@ -374,6 +374,10 @@ class NodeCall:
 
         if family == 'CAPT_ATTR':
             args.add(Argument.Other(header_str=f"domain='{self.domain}'"))
+            
+        if family not in ['PROPERTY', 'ATTRIBUTE']:
+            args.add(Argument.Other(header_str="node_label = None", call_str="label=node_label"))
+            args.add(Argument.Other(header_str="node_color = None", call_str="node_color=node_color"))
 
         # ----- Ensure the socket arguments are properly ordered
         
@@ -501,8 +505,6 @@ class NodeCall:
         section.title = title
         
         data_class.class_doc.add_section(section)
-            
-
 
     
         # ----------------------------------------------------------------------------------------------------
@@ -597,16 +599,17 @@ class NodeCall:
 
         elif family == 'CAPT_ATTR':
             
-            yield _2_ + f"attr_name = '{meth_name}_' + domain" 
-            yield _2_ +  "if not hasattr(self, attr_name):"
+            yield _2_ + f"attr_name = '{meth_name}_' + domain"
+            yield _2_ +  "node = self.attr_props.get(attr_name)"
+            yield _2_ +  "if node is None:"
             yield _3_ + f"node = {snode_call}"
             yield _3_ +  "node.as_attribute(owning_socket=self, domain=domain)"
-            yield _3_ +  "setattr(self, attr_name, node)"
+            yield _3_ +  "self.attr_props[attr_name] = node"
         
             if len(ret_unames) == 1:
-                yield _2_ + f"return getattr(self, attr_name).{list(ret_unames)[0]}\n"
+                yield _2_ + f"return node.{list(ret_unames)[0]}\n"
             else:
-                yield _2_ +  "return getattr(self, attr_name)\n"
+                yield _2_ +  "return node\n"
         
         elif family == 'ATTRIBUTE':
             
@@ -931,8 +934,9 @@ logger = logging.Logger('geonodes')
         meths = self.methods('PROPERTY')
         if meths:
             yield _0_ + _1_ + "def reset_properties(self):"
+            yield _0_ + _2_ + "super().reset_properties()"
             for nc in meths:
-                yield _2_ + f"self.{nc.meth_name}_ = None"
+                yield _0_ + _2_ + f"self.{nc.meth_name}_ = None"
 
         # ----------------------------------------------------------------------------------------------------
         # Methods
