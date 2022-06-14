@@ -893,11 +893,11 @@ def debug():
         
     if True:
         print()
-        print("MARKDONW")
+        print("MARKDOWN")
         print("--------")
         for line in doc.gen_text(True):
             print(line)
 
 
-debug()        
+#debug()        
         

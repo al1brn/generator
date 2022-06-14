@@ -218,6 +218,7 @@ Step 4
 """
 
 from datetime import date
+import re
 
 import bpy
 import mathutils
@@ -1709,18 +1710,17 @@ class WNode:
 
         
 # ====================================================================================================
-# Generate the nodes module
-
-# ----------------------------------------------------------------------------------------------------
-# Create all the nodes
-
-btree_nodes = bpy.data.node_groups["Geometry Nodes"].nodes
-btree_nodes.clear()
+# Create a tree with all the possible nodes
 
 class BNodes(dict):
+    
     def __init__(self):
         print("Collecting the available geometry nodes...")        
         super().__init__()
+
+        btree_nodes = bpy.data.node_groups["Geometry Nodes"].nodes
+        btree_nodes.clear()
+
         for tp in dir(bpy.types):
             if tp.find('Legacy') < 0:
                 try:
@@ -1728,25 +1728,12 @@ class BNodes(dict):
                 except:
                     continue
                 self[tp] = bnode
-                
-# ----- Create the geometry nodes
 
-print("-"*80)
-print("Generating nodes and sockets python from Blender geometry nodes")
-print(f"Blender version: {bpy.app.version_string}")
-print("")
-                
-BNODES = BNodes()
+# ====================================================================================================
+# Generate the files
 
-# ----- Create the wrapping nodes
-
-for bnode in BNODES.values():
-    WNode(bnode)
-
-# ----- The generated nodes and sockets
-
-generated_nodes   = []
-generated_sockets = []
+#generated_nodes = []
+#generated_sockets = []
 
 # ----------------------------------------------------------------------------------------------------
 # Package documentation
@@ -1803,13 +1790,13 @@ def create_data_sockets(fpath):
 
         # ----- For further indexing
                 
-        generated_sockets.append(class_gen.class_name)
+        #generated_sockets.append(class_gen.class_name)
 
 
 # ----------------------------------------------------------------------------------------------------
 # Creat all the nodes in 
 
-def create_nodes(fpath):
+def create_nodes(fpath, BNODES):
     
     fname = fpath + "nodes/nodes.py"
     
@@ -1830,19 +1817,17 @@ from geonodes.core.node import Node
 
 """)
 
-        
+        creation = []
         for bnode in BNODES.values():
             
             # ----------------------------------------------------------------------------------------------------
             # Load the node
             
-            #wn = WNode(bnode)
             wn = WNode.WNODES[bnode.bl_idname]
             
             # ----- Some exclusion
             
             if wn.bl_idname in ['NodeReroute', 'NodeGroupInput', 'NodeGroupOutput', 'GeometryNodeViewer', 'NodeFrame']:
-                #print(f"Ignore: {wn.bl_idname}")
                 continue
             
             # ----- Write the node
@@ -1858,17 +1843,44 @@ from geonodes.core.node import Node
             wn.node_doc.md_file = f"{wn.node_name}.md"
             nodes_doc.add_section(wn.node_doc)
                     
-            # ----- For further indexing
-                    
-            generated_nodes.append(wn.node_name)
-
-                    
-                    
+            # ----- For creation by bl_idname
+            
+            creation.append(f"'{wn.bl_idname}': {wn.node_name}") 
+            
+        # ----- A function to create a node from the bl_idname
+        
+        f.write(f"# {'-'*80}\n")
+        f.write("# Create node from its bl_idname\n\n")
+        
+        f.write( "def create_node(bl_idname, *args, **kwargs):\n")
+        sdict = ",\n    ".join(creation)
+        O = "{"
+        C = "}"
+        f.write(f"    nodes = {O}{sdict}{C}\n")
+        f.write( "    return nodes[bl_idname](*args, **kwargs)\n\n")
+        
+        
+        
+        
                     
 # ====================================================================================================
 # Generate the nodes module
                 
 def create_geonodes(fpath):
+    
+    print("-"*80)
+    print("Generating nodes and sockets python from Blender geometry nodes")
+    print(f"Blender version: {bpy.app.version_string}")
+    print("")
+                
+    # ----- Create all the blender nodes
+    
+    BNODES = BNodes()
+
+    # ----- Create all the wrappers
+
+    for bnode in BNODES.values():
+        WNode(bnode)
     
     # ---------------------------------------------------------------------------
     # data sockets classes
@@ -1882,7 +1894,7 @@ def create_geonodes(fpath):
 
     print("Creating geometry nodes from Blender...")
 
-    create_nodes(fpath)
+    create_nodes(fpath, BNODES)
 
     # ---------------------------------------------------------------------------
     # Documentation
@@ -1964,7 +1976,15 @@ def create_geonodes(fpath):
     else:
         print(f"\n   NOTE: Check if the {count} node{'s' if count > 1 else ''} should be implemented as methods.\n")
         
-    print('Generation complemented')
+    print('Generation completed')
+    print()
+    print('-'*80)
+    print("NOTE: if new nodes are created, don't forget to run node_sizes():")
+    print("Node dimensions are intizalized to zero. To update the property correctly, go")
+    print("in the geometry nodes editor and then back to the script editor.")
+    print("Lauch generator.node_sizes() WITHOUT LAUNCHING create_geonodes AGAIN!")
+    print("... hope it works.")
+    
     
     return
     
@@ -2000,6 +2020,27 @@ def create_geonodes(fpath):
     # Done
     
     print("geondes files generated")
+    
+# ====================================================================================================
+# Generate the nodes module
+                    
+def node_sizes():
+    print()
+    print("Node sizes (to include in module 'arrange.py'")
+    print("To collect the proper size calls this function once they have been generated with create_geonodes")
+    print()
+    
+    
+    btree_nodes = bpy.data.node_groups["Geometry Nodes"].nodes
+    for bnode in btree_nodes:
+        s = f"'{bnode.bl_idname}'"
+        pat = r"\([^\)]*\)"
+        print(f"    {s:42s}: {re.findall(pat, str(bnode.dimensions))[0]},")
+        
+    print()
+        
+
+    
     
 
     

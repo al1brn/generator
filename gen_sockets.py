@@ -208,9 +208,9 @@ class NodeCall:
     # Attribute capture
     
     @classmethod
-    def AttributeCapture(cls, wnode, class_name, attr_name, default_domain='POINT'):
+    def AttributeCapture(cls, wnode, class_name, attr_name, default_domain='POINT', **fixed):
         
-        nc = cls('CAPT_ATTR', wnode, class_name, f"capture_{attr_name}")
+        nc = cls('CAPT_ATTR', wnode, class_name, f"capture_{attr_name}", **fixed)
         
         nc.domain = default_domain
         
@@ -345,6 +345,7 @@ class NodeCall:
 
         if family in ['CAPT_ATTR', 'ATTRIBUTE']:
             args.add(Argument.Other(header_str="self", call_str=""))
+            attribute_as_method = bool(self.wnode.inputs)
             
         for uname in inp_unames:
             wsocks = self.wnode.inputs.unames[uname]
@@ -413,7 +414,7 @@ class NodeCall:
         elif family == 'PROPERTY':
             yield _1_ + "@property"
         
-        elif family == 'ATTRIBUTE':
+        elif family == 'ATTRIBUTE' and not attribute_as_method:
             yield _1_ + "@property"
 
         # ----- Other
@@ -599,12 +600,16 @@ class NodeCall:
 
         elif family == 'CAPT_ATTR':
             
-            yield _2_ + f"attr_name = '{meth_name}_' + domain"
-            yield _2_ +  "node = self.attr_props.get(attr_name)"
-            yield _2_ +  "if node is None:"
-            yield _3_ + f"node = {snode_call}"
-            yield _3_ +  "node.as_attribute(owning_socket=self, domain=domain)"
-            yield _3_ +  "self.attr_props[attr_name] = node"
+            if attribute_as_method:
+                yield _2_ + f"node = {snode_call}"
+                yield _2_ +  "node.as_attribute(owning_socket=self, domain=domain)"
+            else:
+                yield _2_ + f"attr_name = '{meth_name}_' + domain"
+                yield _2_ +  "node = self.attr_props.get(attr_name)"
+                yield _2_ +  "if node is None:"
+                yield _3_ + f"node = {snode_call}"
+                yield _3_ +  "node.as_attribute(owning_socket=self, domain=domain)"
+                yield _3_ +  "self.attr_props[attr_name] = node"
         
             if len(ret_unames) == 1:
                 yield _2_ + f"return node.{list(ret_unames)[0]}\n"
@@ -613,7 +618,14 @@ class NodeCall:
         
         elif family == 'ATTRIBUTE':
             
-            s =  _2_ + f"return self.{self.capture_meth}(domain='{self.domain}')"
+            call_args = []
+            if attribute_as_method:
+                for uname in inp_unames:
+                    call_args += [f"{uname}={uname}"]
+            
+            scall_args = ", ".join(call_args + [f"domain='{self.domain}'"])
+            
+            s =  _2_ + f"return self.{self.capture_meth}({scall_args})"
             if len(ret_unames) > 1:
                 s += f".{list(ret_unames)[self.output_index]}"
             yield s + "\n"
@@ -828,8 +840,8 @@ class DataClass:
     # ----------------------------------------------------------------------------------------------------
     # Add attributes
     
-    def add_attr_capture(self, bl_idname, attr_name, default_domain='POINT'):
-        self.methods_.append(NodeCall.AttributeCapture(self.wnodes[bl_idname], self.class_name, attr_name, default_domain=default_domain))
+    def add_attr_capture(self, bl_idname, attr_name, default_domain='POINT', **fixed):
+        self.methods_.append(NodeCall.AttributeCapture(self.wnodes[bl_idname], self.class_name, attr_name, default_domain=default_domain, **fixed))
         
     def add_attribute(self, bl_idname, meth_name, attr_name, domain='POINT'):
         names = [meth_name] if type(meth_name) is str else meth_name
@@ -1186,6 +1198,15 @@ class GeometryGen(DataClass):
         self.add_attr_capture('GeometryNodeInputPosition',  'position', default_domain='POINT'  )
         self.add_attr_capture('GeometryNodeInputRadius',    'radius',   default_domain='POINT'  )
         
+        self.add_attr_capture('GeometryNodeInputNamedAttribute','named_attribute', default_domain='POINT'  )
+        self.add_attr_capture('GeometryNodeInputNamedAttribute','named_boolean',   default_domain='POINT', data_type='FLOAT'  )
+        self.add_attr_capture('GeometryNodeInputNamedAttribute','named_integer',   default_domain='POINT', data_type='INT'  )
+        self.add_attr_capture('GeometryNodeInputNamedAttribute','named_vector',    default_domain='POINT', data_type='FLOAT_VECTOR'  )
+        self.add_attr_capture('GeometryNodeInputNamedAttribute','named_color',     default_domain='POINT', data_type='FLOAT_COLOR'  )
+        self.add_attr_capture('GeometryNodeInputNamedAttribute','named_boolean',   default_domain='POINT', data_type='BOOLEAN'  )
+        
+        #'FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BOOLEAN'        
+        
         # ----- Default versions
 
         self.add_attribute('GeometryNodeInputID',        'ID',       'ID',       domain='POINT'  )
@@ -1193,6 +1214,7 @@ class GeometryGen(DataClass):
         self.add_attribute('GeometryNodeInputNormal',    'normal',   'normal',   domain='FACE'   )
         self.add_attribute('GeometryNodeInputPosition',  'position', 'position', domain='POINT'  )
         self.add_attribute('GeometryNodeInputRadius',    'radius',   'radius',   domain='POINT'  )
+
         
         # ----- Properties
         
@@ -1210,9 +1232,12 @@ class GeometryGen(DataClass):
         self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_vector',  data_type = 'FLOAT_VECTOR' )
         self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_color',   data_type = 'FLOAT_COLOR'  )
 
+        self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_elements')
+        self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_points',    domain = 'POINT'   )
+        
+
         self.add_call('STACK', 'GeometryNodeDeleteGeometry',       'delete_geometry'    )
         self.add_call('STACK', 'GeometryNodeMergeByDistance',      'merge_by_distance'  )
-        self.add_call('STACK', 'GeometryNodeRealizeInstances',     'realize_instances'  )
         self.add_call('STACK', 'GeometryNodeReplaceMaterial',      'replace_material'   )
         self.add_call('STACK', 'GeometryNodeScaleElements',        'scale_elements'     )
         self.add_call('STACK', 'GeometryNodeSetID',                'set_ID'             )
@@ -1222,9 +1247,17 @@ class GeometryGen(DataClass):
         self.add_call('STACK', 'GeometryNodeSetShadeSmooth',       'set_shade_smooth'   )
         self.add_call('STACK', 'GeometryNodeTransform',            'transform'          )
         
+        self.add_call('STACK', 'GeometryNodeStoreNamedAttribute',  'store_named_attribute')
+
+        self.add_call('STACK', 'GeometryNodeStoreNamedAttribute',  'store_named_float',      data_type = 'FLOAT'       )
+        self.add_call('STACK', 'GeometryNodeStoreNamedAttribute',  'store_named_integer',    data_type = 'INT'         )
+        self.add_call('STACK', 'GeometryNodeStoreNamedAttribute',  'store_named_vector',     data_type = 'FLOAT_VECTOR')
+        self.add_call('STACK', 'GeometryNodeStoreNamedAttribute',  'store_named_color',      data_type = 'FLOAT_COLOR' )
+        self.add_call('STACK', 'GeometryNodeStoreNamedAttribute',  'store_named_byte_color', data_type = 'BYTE_COLOR'  )
+        self.add_call('STACK', 'GeometryNodeStoreNamedAttribute',  'store_named_boolean',    data_type = 'BOOLEAN'     )
+        
         self.add_call('METHOD', 'GeometryNodeAttributeDomainSize',  'attribute_domain_size' )
-        #self.add_call('METHOD', 'GeometryNodeAttributeRemove',      'attribute_remove'      )
-        self.add_call('METHOD', 'GeometryNodeRemoveAttribute',      'remove_attribute'      )
+        self.add_call('METHOD', 'GeometryNodeRemoveAttribute',      'remove_named_attribute' )
         
         self.add_call('METHOD', 'GeometryNodeSeparateGeometry',     'components'            )
         self.add_call('METHOD', 'GeometryNodeConvexHull',           'convex_hull'           )
@@ -1272,6 +1305,8 @@ class MeshGen(DataClass):
         
         self.add_attr_capture('GeometryNodeInputMaterialIndex',     'material_index',     default_domain='FACE' )
         self.add_attr_capture('GeometryNodeMaterialSelection',      'material_selection', default_domain='FACE' )
+        self.add_attr_capture('GeometryNodeInputMeshFaceIsPlanar',  'face_is_planar',     default_domain='FACE' )
+        
         
 
         self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'face_ID',         'ID',           domain='FACE' )
@@ -1284,7 +1319,7 @@ class MeshGen(DataClass):
 
         self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'face_position',   'position',     domain='FACE' )
         self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'egde_position',   'position',     domain='EDGE' )
-        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'corner_porision', 'position',     domain='CORNER' )
+        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'corner_position', 'position',     domain='CORNER' )
 
 
         meth_names = ['edge_angle', 'edge_unsigned_angle']
@@ -1308,7 +1343,9 @@ class MeshGen(DataClass):
         
         self.add_attribute('GeometryNodeInputMaterialIndex',     'material_index',     'material_index',     domain='FACE' )
         self.add_attribute('GeometryNodeMaterialSelection',      'material_selection', 'material_selection', domain='FACE' )
-        
+        self.add_attribute('GeometryNodeInputMeshFaceIsPlanar',  'face_is_planar',    'face_is_planar',      domain='FACE' )
+
+
         # ----------------------------------------------------------------------------------------------------
         # Methods
 
@@ -1318,6 +1355,9 @@ class MeshGen(DataClass):
         self.add_call('STACK', 'GeometryNodeTriangulate',        'triangulate'          )
         self.add_call('STACK', 'GeometryNodeDualMesh',           'dual'                 )
         self.add_call('STACK', 'GeometryNodeFlipFaces',          'flip_faces'           )
+        
+        self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_edges',     domain = 'EDGE'    )
+        self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_faces',     domain = 'FACE'    )
         
         self.add_call('METHOD', 'GeometryNodeExtrudeMesh',              'extrude',                       )
         self.add_call('METHOD', 'GeometryNodeMeshToCurve',              'to_curve',                     ret_class='Curve')
@@ -1349,8 +1389,12 @@ class InstancesGen(DataClass):
         self.add_call('STACK', 'GeometryNodeRotateInstances',    'rotate'    )
         self.add_call('STACK', 'GeometryNodeScaleInstances',     'scale'     )
         self.add_call('STACK', 'GeometryNodeTranslateInstances', 'translate' )
+        self.add_call('STACK', 'GeometryNodeRealizeInstances',   'realize'   )
+        
         
         self.add_call('METHOD', 'GeometryNodeInstancesToPoints',  'to_points', ret_class='Points')
+        
+        self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_instances', domain = 'INSTANCE')
         
 # -----------------------------------------------------------------------------------------------------------------------------
 # Volume
@@ -1407,6 +1451,9 @@ class SplineGen(DataClass):
         
         self.add_call('STACK', 'GeometryNodeSetSplineCyclic',              'set_cyclic'     )
         self.add_call('STACK', 'GeometryNodeSetSplineResolution',          'set_resolution' )
+
+        self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_splines',   domain = 'SPLINE'  )
+        
         
 
 # -----------------------------------------------------------------------------------------------------------------------------
