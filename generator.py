@@ -1907,7 +1907,8 @@ def create_geonodes(fpath):
                 lines = [
                     f" > Field [{wn.node_name}](/docs/nodes/{wn.node_name}.md)",
                      "",
-                    f"Blender menu : {NODES_MENU[wn.blender_ref_name][1]}",
+                    f"Blender menu : **{NODES_MENU[wn.blender_ref_name][1]}**<br>",
+                    f"<sub>go to [top](#class-{class_name.lower().replace(' ', '-')}) [index](ref:index)</sub>",
                     ]
                 return "\n".join(lines)
             

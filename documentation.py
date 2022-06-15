@@ -142,15 +142,17 @@ class Block(list):
     def text_indent(self, markdown=False):
         doc = self.doc
         if markdown:
-            indent = ""
-            cur = self
-            while cur is not None:
-                cur = cur.parent
-                if isinstance(cur, Text):
-                    indent += "  "
+            if self.parent is None or not isinstance(self.parent, Text):
+                return ""
+            
+            if self.prefix == "":
+                if self.parent.prefix == "":
+                    return self.parent.text_indent(True) + "  "
                 else:
-                    return indent
-            return indent
+                    return self.parent.text_indent(True)
+            else:
+                return self.parent.text_indent(True)
+
         else:
             return ("    " if doc is None else doc.base_indent) * self.depth(False)
 
@@ -854,35 +856,33 @@ class Doc(Section):
 def debug():
 
     text= """
-    Check the attributes
-    
-    Input attributes are initialized with a socket owner
-    
-    When finalizing the tree, we must check that the attribute actually feeds the expectedt geometry.
-    If it is not the case, we must insert a "Capture Attribute" node.
-    
-    The insertion is made with the following algorithm
-    
-    1. Check if capture is needed
-       - for each fed node:
-         - if the node has an input geometry:
-           - if the input geometry is the expected one:
-             - ok
-           - else
-             - insertion is needed
-         - else:
-           - continue exploration with the nodes fed by this node
-    
-    2. If insertion is needed
-       - Create the capture node
-       - Set the proper parameters
-       - Input geometry with the owning socket
-       - Output geometry to the sockets the owning socket was linked to
-       - Output attribute to the sockets the attribute was connected to
-    
-    
-    
-    """
+        <field GeometryNodeCurveHandleTypeSelection>
+        
+        Method
+        
+        The values of the two parameters are declined in 2 methods:
+        - [left_handle_selection](#left_handle_selection)
+        - [right_handle_selection](#right_handle_selection)
+                                       
+        and 8 properties:
+        - [left_handle_free](#left_handle_free)
+        - [left_handle_vector](#left_handle_vector)
+        - [left_handle_vector](#left_handle_vector)
+        - [left_handle_align](#left_handle_align)
+        - [right_handle_free](#right_handle_free)
+        - [right_handle_auto](#right_handle_auto)
+        - [right_handle_vector](#right_handle_vector)
+        - [right_handle_align](#right_handle_align)
+        
+        Arguments
+        ---------
+            - handle_type : str in 'AUTO', 'FREE', 'VECTOR', 'ALIGN'
+            - mode : str in ['RIGHT', 'LEFT'] or set {'RIGHT', 'LEFT'}
+        
+        Returns
+        -------
+            Boolean
+        """
 
     doc = Doc()
     doc.set_text(text)
