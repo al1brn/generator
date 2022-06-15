@@ -735,12 +735,6 @@ class Arguments(list):
         else:
             self.append(arg)
     
-    def add_attribute_args(self, domain='POINT', data_type='FLOAT', fixed_domain=False):
-        self.append(Argument('owner_socket', 'self',     is_fixed=True, quote_str_value = False))
-        self.append(Argument('domain',        domain,    is_fixed=fixed_domain))
-        self.append(Argument('data_type',     data_type, is_fixed=True))
-        
-        
     @property
     def scall_demo(self):
         s = ""
@@ -1183,6 +1177,14 @@ class WNode:
 
     def __str__(self):
         return f"[{self.node_name}]"
+    
+    def register_socket(self, class_name, name, family):
+        lst = self.data_sockets.get(class_name)
+        if lst is None:
+            self.data_sockets[class_name] = [(name, family)]
+        else:
+            lst.append((name, family))
+        
         
     @property
     def bl_idname(self):
@@ -1881,6 +1883,35 @@ def create_geonodes(fpath):
 
     for bnode in BNODES.values():
         WNode(bnode)
+        
+    # ---------------------------------------------------------------------------
+    # The field nodes are implemented in domains.py
+    # We must load the documentation from the file to enrich the
+    # references to the nodes
+    
+    # ----- Parse domains.py
+    
+    FIELDS = set()
+    
+    parsed_domains = Parser.FromFile(fpath + "core/domains.py").documentation()
+    for class_name, cdoc in parsed_domains.items():
+        for name, fdoc in cdoc.funcs.items():
+        
+            def repl(m):
+                blid = m.group(2)
+                FIELDS.add(blid)
+                wn = WNode.WNODES[blid]
+                
+                wn.register_socket(class_name, name, 'Fields')
+                
+                lines = [
+                    f" > Field [{wn.node_name}](/docs/nodes/{wn.node_name}.md)",
+                     "",
+                    f"Blender menu : {NODES_MENU[wn.blender_ref_name][1]}",
+                    ]
+                return "\n".join(lines)
+            
+            fdoc.comment = re.sub(r"(<\s*field\s+([^>]+)>)", repl, fdoc.comment)
     
     # ---------------------------------------------------------------------------
     # data sockets classes
@@ -1898,13 +1929,15 @@ def create_geonodes(fpath):
 
     # ---------------------------------------------------------------------------
     # Documentation
+
+    print("Documentation...")
     
-    # ----- Parse core files to get the inline documentation
+    # ----- Parse node.py
     
     node_doc = Parser.FromFile(fpath + "core/node.py").documentation()
     
     for name in ["DataSocket", "Tree", "Node"]:
-        section = Section.FromParserDoc(parent=core_doc, prefix = "Class ", pdoc=node_doc[name])
+        section = Section.FromParserDoc(parent=core_doc, prefix = "Class", pdoc=node_doc[name])
         section.id = name
         section.md_file = f"{name}.md"
     
@@ -1912,13 +1945,10 @@ def create_geonodes(fpath):
         section = Section.FromParserDoc(parent=nodes_doc, prefix = "Node", pdoc=node_doc[name])
         section.id = name
         section.md_file = f"{name}.md"
-    
+
+    # ----- Parse datasockets.py
     
     ds_doc = Parser.FromFile(fpath + "core/datasockets.py").documentation()
-    
-    # ----- Data sockets
-    
-    print("Data sockets documentation...")
     
     for section in sockets_doc:
         
@@ -1926,6 +1956,24 @@ def create_geonodes(fpath):
         with open(fname, 'w') as f:
             for line in section.gen_text(True):
                 f.write(line + "\n")
+
+    # ----- Parse domains.py
+        
+    for name in ["Domain", "PointDomain", "EdgeDomain", "FaceDomain", "CornerDomain", "CurveDomain"]:
+        section = Section.FromParserDoc(parent=core_doc, prefix = "Class", pdoc=parsed_domains[name])
+        section.id = name
+        section.md_file = f"{name}.md"
+        
+    # ----- Core
+    # Core documentation enrich the list of nodes references
+
+    for section in core_doc:
+        text = "\n".join(section.gen_text(True))
+        text = re.sub(r"(<\s*field\s+([^>]+)>)", repl, text)
+        
+        fname = fpath + section.file_link
+        with open(fname, 'w') as f:
+            f.write(text)
                 
     # ----- Nodes
 
@@ -1938,14 +1986,6 @@ def create_geonodes(fpath):
             for line in section.gen_text(True):
                 f.write(line + "\n")
 
-    # ----- Core
-
-    for section in core_doc:
-        
-        fname = fpath + section.file_link
-        with open(fname, 'w') as f:
-            for line in section.gen_text(True):
-                f.write(line + "\n")
                 
     # ----- Index
 
@@ -1968,11 +2008,12 @@ def create_geonodes(fpath):
     print("Nodes not implemented as socket methods:")
     count = 0
     for bnode in BNODES.values():
-        if bnode.bl_idname not in gsock.DataClass.GENS:
+        if (bnode.bl_idname not in gsock.DataClass.GENS) and (bnode.bl_idname not in FIELDS):
             print(f"    {bnode.bl_idname:40s}: '{bnode.name}'")
             count += 1
+            
     if count == 0:
-        print("   all (ok")
+        print("   all (ok)")
     else:
         print(f"\n   NOTE: Check if the {count} node{'s' if count > 1 else ''} should be implemented as methods.\n")
         

@@ -291,6 +291,10 @@ class Parser:
             def comment(self):
                 return self.bef_comment if self.aft_comment == "" else self.aft_comment
             
+            @comment.setter
+            def comment(self, value):
+                self.aft_comment = value
+            
             def __repr__(self):
                 indent = "" if (self.is_class or self.class_doc is None) else "    "
                 scomm = f"\n{indent}    | ".join([""] + self.comment.split("\n"))
@@ -391,9 +395,54 @@ class Parser:
         return docs
     
     
+def debug():
+    text = """
+class Foo1:
+    # Foo comment 1
+    # Foo comment 2
+    
+    def bar():
+        # bar comment 1
+        # bar comment 2
+        
+        bar code
+        
+    def baz():
+        # baz comment 1
+        # baz comment 2
+        
+        bar code
 
-
-
-
+class Foo2:
+    # Foo comment 1
+    # Foo comment 2
+    
+    def bar():
+        # bar comment 1
+        # bar comment 2
+        
+        bar code
+        
+    def baz():
+        # baz comment 1
+        # baz comment 2
+        
+        bar code
+"""
+    
+    doc = Parser(text).documentation()
+    
+    for class_name, cdoc in doc.items():
+        for name, fdoc in cdoc.funcs.items():
+            print(class_name, name)
+            print()
+            
+    
+    #print(doc)
+        
+debug()    
     
     
+    
+        
+        

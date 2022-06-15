@@ -814,7 +814,6 @@ class Doc(Section):
             return self.md_images_
         else:
             return self.md_root + self.md_images_
-    
         
     def solve_link(self, link):
         
@@ -837,7 +836,11 @@ class Doc(Section):
         if words[0].lower() == 'id':
             section = self.get_section(sid)
             if section is None:
-                logger.error(f"Link error in : '{link}': The section named '{words[1]}' doesn't exist.\nDoc sections: {[section.title for section in self]}")
+                #print('-'*80)
+                #print("\n".join(self.gen_toc(depth=3, sort=False, classify=None, markdown=False)))
+                #print('-'*80)
+                logger.error(f"Link error in : '{link}': The section named '{words[1]}' doesn't exist in {[section.title for section in self]})")
+                return "???"
             return "/" + section.file_link + anchor
                 
         if words[0].lower() in ['image', 'img']:
@@ -888,15 +891,17 @@ def debug():
         print()
         print("TEXT")
         print("----")
-        for line in doc.gen_text():
-            print(line)
+        print("\n".join(doc.gen_text()))
+        #for line in doc.gen_text():
+        #    print(line)
         
     if True:
         print()
         print("MARKDOWN")
         print("--------")
-        for line in doc.gen_text(True):
-            print(line)
+        print("\n".join(doc.gen_text(True)))
+        #for line in doc.gen_text(True):
+        #    print(line)
 
 
 #debug()        

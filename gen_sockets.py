@@ -28,8 +28,6 @@ FAMILIES = {
     'STATIC'      : ('Static method',    'Static methods'        , False),
     'CLASS'       : ('Class method',     'Class methods'         , False),    
     'PROPERTY'    : ('Property',         'Properties'            , True ),
-    'CAPT_ATTR'   : ('Capture attribute','Attribute capture'     , True ),
-    'ATTRIBUTE'   : ('Attribute',        'Attributes'            , True ),
     'METHOD'      : ('Method',           'Methods'               , True ),        
     
     'FUNCTION'    : ('Function',         'Functions'             , False),
@@ -153,9 +151,6 @@ MULTI_CLASSES_NODES = { # Function name and is an attribute. If it is an attribu
     'GeometryNodeSwitch'             : ('switch',              False ), # ('FLOAT', 'INT', 'BOOLEAN', 'VECTOR', 'STRING', 'RGBA', 'OBJECT', 'IMAGE', 'GEOMETRY', 'COLLECTION', 'TEXTURE', 'MATERIAL')
     'ShaderNodeMapRange'             : ('map_range',           False ), # ('FLOAT', 'FLOAT_VECTOR')
     
-#   'FunctionNodeCompare'            : ('compare',             False ), # ('FLOAT', 'INT', 'VECTOR', 'STRING', 'RGBA')
-#   'GeometryNodeViewer'             : ('viewer',              False ), # ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BOOLEAN')
-    
 }
 
 DATA_TYPES = {
@@ -203,32 +198,6 @@ class NodeCall:
         nc.output_index     = output_index
 
         return nc
-    
-    # ----------------------------------------------------------------------------------------------------
-    # Attribute capture
-    
-    @classmethod
-    def AttributeCapture(cls, wnode, class_name, attr_name, default_domain='POINT', **fixed):
-        
-        nc = cls('CAPT_ATTR', wnode, class_name, f"capture_{attr_name}", **fixed)
-        
-        nc.domain = default_domain
-        
-        return nc
-    
-    # ----------------------------------------------------------------------------------------------------
-    # An attribute
-    
-    @classmethod
-    def Attribute(cls, wnode, class_name, meth_name, attr_name, domain='POINT', output_index=0):
-        
-        nc = cls('ATTRIBUTE', wnode, class_name, meth_name)
-        
-        nc.capture_meth = f"capture_{attr_name}"
-        nc.domain       = domain
-        nc.output_index = output_index
-        
-        return nc    
 
     # ----------------------------------------------------------------------------------------------------
     # The call is a method using self
@@ -245,14 +214,7 @@ class NodeCall:
         
         unames = self.wnode.output_unames(self.fixed)
         
-        if self.family == 'ATTRIBUTE':
-            
-            index = self.output_index
-            ret_str = f"{unames[list(unames)[index]]} = {self.capture_meth}(domain='{self.domain}')"
-            if len(unames) > 1:
-                ret_str += f".{list(unames)[index]}"
-            
-        elif len(unames) == 0:
+        if len(unames) == 0:
             ret_str = "None"
             
         elif len(unames) == 1:
@@ -315,7 +277,7 @@ class NodeCall:
         # ---------------------------------------------------------------------------
         # If self_name is None, use the first enabled input socket of the proper class
 
-        if family in ['FUNCTION', 'STATIC', 'CLASS', 'CONSTRUCTOR', 'ATTRIBUTE', 'CAPT_ATTR']:
+        if family in ['FUNCTION', 'STATIC', 'CLASS', 'CONSTRUCTOR']:
             if self_name is not None:
                 raise RuntimeError(f"The method {meth_name} on node {self.node_name} is {family}: it can have a self argument: {self_name}.")
                 
@@ -343,10 +305,6 @@ class NodeCall:
         
         args = Arguments()
 
-        if family in ['CAPT_ATTR', 'ATTRIBUTE']:
-            args.add(Argument.Other(header_str="self", call_str=""))
-            attribute_as_method = bool(self.wnode.inputs)
-            
         for uname in inp_unames:
             wsocks = self.wnode.inputs.unames[uname]
             
@@ -373,10 +331,7 @@ class NodeCall:
         if family == 'PROPERTY':
             args.add(Argument.Other(header_str="", call_str="label=f\"{self.node_chain_label}." + meth_name + "\""))
 
-        if family == 'CAPT_ATTR':
-            args.add(Argument.Other(header_str=f"domain='{self.domain}'"))
-            
-        if family not in ['PROPERTY', 'ATTRIBUTE']:
+        if family not in ['PROPERTY']:
             args.add(Argument.Other(header_str="node_label = None", call_str="label=node_label"))
             args.add(Argument.Other(header_str="node_color = None", call_str="node_color=node_color"))
 
@@ -414,9 +369,6 @@ class NodeCall:
         elif family == 'PROPERTY':
             yield _1_ + "@property"
         
-        elif family == 'ATTRIBUTE' and not attribute_as_method:
-            yield _1_ + "@property"
-
         # ----- Other
         # def method(self, args,...):
         
@@ -439,19 +391,15 @@ class NodeCall:
         else:
             sample = f"v = {class_name.lower()}.{meth_name}({args.scall_demo})"
             
-        if family == 'ATTRIBUTE':
-            sret = str(ret_unames[list(ret_unames)[self.output_index]])
+        if len(ret_unames) == 0:
+            sret = "self"
 
+        elif len(ret_unames) == 1:
+            sret = str(ret_unames[list(ret_unames)[0]])
+        
         else:
-            if len(ret_unames) == 0:
-                sret = "self"
-
-            elif len(ret_unames) == 1:
-                sret = str(ret_unames[list(ret_unames)[0]])
-            
-            else:
-                s = ", ".join([f"{uname} ({ret_unames[uname]})" for uname in ret_unames])
-                sret = f"Sockets [{s}]"
+            s = ", ".join([f"{uname} ({ret_unames[uname]})" for uname in ret_unames])
+            sret = f"Sockets [{s}]"
         
         section = Section(None, f"{meth_name}")
         section.family = FAMILIES[self.family][1]
@@ -564,72 +512,7 @@ class NodeCall:
                     yield _1_ +f"@{meth_name}.setter"
                     yield _1_ + f"def {meth_name}(self, value):"
                     yield _2_ + f"self.{self.main_prop_name}.{sock_name} = value\n"
-        
-                    
-        # ----------------------------------------------------------------------------------------------------
-        # ATTRIBUTE: the attribute dictionary contains:
-        # - capture      : False or True if if is the implementation of the captur_attr method
-        # - capture_meth : Name of the capture_attr method (when capture is False) 
-        # - domain       : The attribute domain
-        # - output_index : The index of the output socket
-        #
-        # Implementation depends upon the capture value
-        # True:  The capture method with domain argument to cover all the possible domains
-        # False: Property with a specific domain
-        #
-        # ----- capture = True:
-        # 
-        # def capture_attr(self, domain='POINT'):
-        #      node = nodes.NodeAttr()
-        #      node.as_atribute(owning_socket=self, domain=domain)
-        #      return node.socket # When only one output socket
-        #      return node        # When several output sockets
-        #
-        # ----- capture = False
-        #
-        # @property
-        # def point_attr(self, domain='POINT'):
-        #      return self.capture_attr(domain=domain)
-        #
-        # If the attribute has several output sockets (GeometryNodeInputMeshIsland returns island_vertex and island_count),
-        # each output socket is implemented. The names are provided in prop_names which is mandatory
-        #
-        # @property
-        # def point_attr_socket(self):
-        #      return self.capture(domain='POINT').output_sockets[output_index]
-
-        elif family == 'CAPT_ATTR':
-            
-            if attribute_as_method:
-                yield _2_ + f"node = {snode_call}"
-                yield _2_ +  "node.as_attribute(owning_socket=self, domain=domain)"
-            else:
-                yield _2_ + f"attr_name = '{meth_name}_' + domain"
-                yield _2_ +  "node = self.attr_props.get(attr_name)"
-                yield _2_ +  "if node is None:"
-                yield _3_ + f"node = {snode_call}"
-                yield _3_ +  "node.as_attribute(owning_socket=self, domain=domain)"
-                yield _3_ +  "self.attr_props[attr_name] = node"
-        
-            if len(ret_unames) == 1:
-                yield _2_ + f"return node.{list(ret_unames)[0]}\n"
-            else:
-                yield _2_ +  "return node\n"
-        
-        elif family == 'ATTRIBUTE':
-            
-            call_args = []
-            if attribute_as_method:
-                for uname in inp_unames:
-                    call_args += [f"{uname}={uname}"]
-            
-            scall_args = ", ".join(call_args + [f"domain='{self.domain}'"])
-            
-            s =  _2_ + f"return self.{self.capture_meth}({scall_args})"
-            if len(ret_unames) > 1:
-                s += f".{list(ret_unames)[self.output_index]}"
-            yield s + "\n"
-                
+              
         # ----------------------------------------------------------------------------------------------------
         # Other : can return 3 things depending on the number of output sockets in ret_unames
         #
@@ -786,7 +669,12 @@ class DataClass:
         elif self.class_name == 'Color':
             for op in col_ops:
                 self.add_call('METHOD', blid, op.lower(), data_type='RGBA', operation=op, mode='ELEMENT')
-        
+                
+    # ----------------------------------------------------------------------------------------------------
+    # Specific code
+    
+    def gen_specific(self):
+        yield ""
         
     # ----------------------------------------------------------------------------------------------------
     # Data type for multi classes nodes (random for instance)
@@ -835,18 +723,6 @@ class DataClass:
         
         for index, prop_name in enumerate(prop_names):
             self.methods_.append(NodeCall.Property(self.wnodes[bl_idname], self.class_name, prop_name, settable=settable, main_prop_name=meth_name, output_index=index, **kwargs))
-            
-        
-    # ----------------------------------------------------------------------------------------------------
-    # Add attributes
-    
-    def add_attr_capture(self, bl_idname, attr_name, default_domain='POINT', **fixed):
-        self.methods_.append(NodeCall.AttributeCapture(self.wnodes[bl_idname], self.class_name, attr_name, default_domain=default_domain, **fixed))
-        
-    def add_attribute(self, bl_idname, meth_name, attr_name, domain='POINT'):
-        names = [meth_name] if type(meth_name) is str else meth_name
-        for index, name in enumerate(names):
-            self.methods_.append(NodeCall.Attribute(self.wnodes[bl_idname], self.class_name, name, attr_name=attr_name, domain=domain, output_index=index))
 
     # ----------------------------------------------------------------------------------------------------
     # Template
@@ -885,6 +761,9 @@ Blender version: {bpy.app.version_string}
 import geonodes as gn
 from geonodes.core import datasockets as dsock
 from geonodes.nodes import nodes
+from geonodes.core.domains import Domain
+from geonodes import PointDomain, EdgeDomain, FaceDomain, CornerDomain, CurveDomain
+
 import logging
 logger = logging.Logger('geonodes')
 
@@ -938,7 +817,12 @@ logger = logging.Logger('geonodes')
             yield indent + line
             indent = _1_
         yield _1_ + '"""' + "\n"
-            
+        
+        # ----------------------------------------------------------------------------------------------------
+        # Specific
+        
+        for line in self.gen_specific():
+            yield line
         
         # ----------------------------------------------------------------------------------------------------
         # Properties attributes
@@ -977,15 +861,7 @@ logger = logging.Logger('geonodes')
     def register_nodes(self):
         
         for nc in self.methods_:
-            
-            ref = (nc.meth_name, FAMILIES[nc.family][0])
-            
-            data_socks = nc.wnode.data_sockets
-            lst = data_socks.get(self.class_name)
-            if lst is None:
-                data_socks[self.class_name] = [ref]
-            else:
-                lst.append(ref)
+            nc.wnode.register_socket(self.class_name, nc.meth_name, FAMILIES[nc.family][0])
                     
 
 # -----------------------------------------------------------------------------------------------------------------------------
@@ -1188,33 +1064,6 @@ class GeometryGen(DataClass):
         super().__init__(nodes, 'Geometry', 'dsock.Geometry')
         
         self.add_call('STATIC', 'GeometryNodeIsViewport', 'is_viewport')
-
-        # ----- Attributes captures
-        
-        
-        self.add_attr_capture('GeometryNodeInputID',        'ID',       default_domain='POINT'  )
-        self.add_attr_capture('GeometryNodeInputIndex',     'index',    default_domain='POINT'  )
-        self.add_attr_capture('GeometryNodeInputNormal',    'normal',   default_domain='FACE'   )
-        self.add_attr_capture('GeometryNodeInputPosition',  'position', default_domain='POINT'  )
-        self.add_attr_capture('GeometryNodeInputRadius',    'radius',   default_domain='POINT'  )
-        
-        self.add_attr_capture('GeometryNodeInputNamedAttribute','named_attribute', default_domain='POINT'  )
-        self.add_attr_capture('GeometryNodeInputNamedAttribute','named_boolean',   default_domain='POINT', data_type='FLOAT'  )
-        self.add_attr_capture('GeometryNodeInputNamedAttribute','named_integer',   default_domain='POINT', data_type='INT'  )
-        self.add_attr_capture('GeometryNodeInputNamedAttribute','named_vector',    default_domain='POINT', data_type='FLOAT_VECTOR'  )
-        self.add_attr_capture('GeometryNodeInputNamedAttribute','named_color',     default_domain='POINT', data_type='FLOAT_COLOR'  )
-        self.add_attr_capture('GeometryNodeInputNamedAttribute','named_boolean',   default_domain='POINT', data_type='BOOLEAN'  )
-        
-        #'FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BOOLEAN'        
-        
-        # ----- Default versions
-
-        self.add_attribute('GeometryNodeInputID',        'ID',       'ID',       domain='POINT'  )
-        self.add_attribute('GeometryNodeInputIndex',     'index',    'index',    domain='POINT'  )
-        self.add_attribute('GeometryNodeInputNormal',    'normal',   'normal',   domain='FACE'   )
-        self.add_attribute('GeometryNodeInputPosition',  'position', 'position', domain='POINT'  )
-        self.add_attribute('GeometryNodeInputRadius',    'radius',   'radius',   domain='POINT'  )
-
         
         # ----- Properties
         
@@ -1290,61 +1139,6 @@ class MeshGen(DataClass):
         self.add_call('METHOD', 'GeometryNodeMeshBoolean', 'intersect',  operation='INTERSECT'  )
         self.add_call('METHOD', 'GeometryNodeMeshBoolean', 'union',      operation='UNION'      )
         self.add_call('METHOD', 'GeometryNodeMeshBoolean', 'difference', self_name='mesh_1',    operation='DIFFERENCE')
-        
-        # ----- Attributes captures
-        # domains = ['POINT', 'EDGE', 'FACE', 'CORNER', 'CURVE', 'INSTANCE']
-
-        self.add_attr_capture('GeometryNodeInputMeshEdgeAngle',     'edge_angle',       default_domain='EDGE' )
-        self.add_attr_capture('GeometryNodeInputMeshEdgeNeighbors', 'edge_neighbors',   default_domain='EDGE' )
-        self.add_attr_capture('GeometryNodeInputMeshEdgeVertices',  'edge_vertices',    default_domain='EDGE' )
-        self.add_attr_capture('GeometryNodeInputMeshFaceArea',      'face_area',        default_domain='FACE' )
-        self.add_attr_capture('GeometryNodeInputMeshFaceNeighbors', 'face_neighbors',   default_domain='FACE' )
-        self.add_attr_capture('GeometryNodeInputMeshIsland',        'island',           default_domain='POINT')
-        self.add_attr_capture('GeometryNodeInputShadeSmooth',       'shade_smooth',     default_domain='FACE' )
-        self.add_attr_capture('GeometryNodeInputMeshVertexNeighbors', 'vertex_neighbors', default_domain='POINT' )
-        
-        self.add_attr_capture('GeometryNodeInputMaterialIndex',     'material_index',     default_domain='FACE' )
-        self.add_attr_capture('GeometryNodeMaterialSelection',      'material_selection', default_domain='FACE' )
-        self.add_attr_capture('GeometryNodeInputMeshFaceIsPlanar',  'face_is_planar',     default_domain='FACE' )
-        
-        
-
-        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'face_ID',         'ID',           domain='FACE' )
-        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'egde_ID',         'ID',           domain='EDGE' )
-        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'corner_ID',       'ID',           domain='CORNER' )
-
-        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'face_index',      'index',        domain='FACE' )
-        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'egde_index',      'index',        domain='EDGE' )
-        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'corner_index',    'index',        domain='CORNER' )
-
-        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'face_position',   'position',     domain='FACE' )
-        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'egde_position',   'position',     domain='EDGE' )
-        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     'corner_position', 'position',     domain='CORNER' )
-
-
-        meth_names = ['edge_angle', 'edge_unsigned_angle']
-        self.add_attribute('GeometryNodeInputMeshEdgeAngle',     meth_names,        'edge_angle',       domain='EDGE' )
-
-        self.add_attribute('GeometryNodeInputMeshEdgeNeighbors', 'edge_neighbors',   'edge_neighbors',  domain='EDGE' )
-        
-        meth_names = ['edge_vertices_index1', 'edge_vertices_index2', 'edge_vertices_position1', 'edge_vertices_position2']
-        self.add_attribute('GeometryNodeInputMeshEdgeVertices',  meth_names,        'edge_vertices',   domain='EDGE')
-        
-        self.add_attribute('GeometryNodeInputMeshFaceArea',      'face_area',        'face_area',       domain='FACE' )
-        
-        meth_names = ['face_neighbors_vertex_count', 'face_neighbors_face_count']
-        self.add_attribute('GeometryNodeInputMeshFaceNeighbors', meth_names,         'face_neighbors',  domain='FACE')
-        
-        self.add_attribute('GeometryNodeInputMeshIsland',        'island',           'island',          domain='POINT')
-        self.add_attribute('GeometryNodeInputShadeSmooth',       'shade_smooth',     'shade_smooth',    domain='FACE' )
-
-        meth_names = ['vertex_neighbors_vertex_count', 'vertex_neighbors_face_count']
-        self.add_attribute('GeometryNodeInputMeshVertexNeighbors', meth_names,       'vertex_neighbors', domain='POINT' )
-        
-        self.add_attribute('GeometryNodeInputMaterialIndex',     'material_index',     'material_index',     domain='FACE' )
-        self.add_attribute('GeometryNodeMaterialSelection',      'material_selection', 'material_selection', domain='FACE' )
-        self.add_attribute('GeometryNodeInputMeshFaceIsPlanar',  'face_is_planar',    'face_is_planar',      domain='FACE' )
-
 
         # ----------------------------------------------------------------------------------------------------
         # Methods
@@ -1364,6 +1158,27 @@ class MeshGen(DataClass):
         self.add_call('METHOD', 'GeometryNodeMeshToPoints',             'to_points',                    ret_class='Points')
         self.add_call('METHOD', 'GeometryNodeDistributePointsOnFaces',  'distribute_points_on_faces',   ret_class='Points')
         
+    # ----------------------------------------------------------------------------------------------------
+    # Specific code
+    
+    def gen_specific(self):
+        yield "\n"
+        yield "    def init_domains(self):\n"
+        yield "        self.point  = PointDomain(self)\n"
+        yield "        self.edge   = EdgeDomain(self)\n"
+        yield "        self.face   = FaceDomain(self)\n"
+        yield "        self.corner = CornerDomain(self)\n\n"
+        
+        yield "    @property\n"
+        yield "    def vertex(self):\n"
+        yield "        return self.point\n\n"
+        
+        yield "    @property\n"
+        yield "    def face_corner(self):\n"
+        yield "        return self.corner\n"
+        
+        
+        
 # -----------------------------------------------------------------------------------------------------------------------------
 # Points
         
@@ -1376,15 +1191,21 @@ class PointsGen(DataClass):
         self.add_call('METHOD', 'GeometryNodeInstanceOnPoints',  'instance_on_points', ret_class='Instances')
         self.add_call('METHOD', 'GeometryNodePointsToVertices',  'to_vertices',        ret_class='Mesh'     )
         self.add_call('METHOD', 'GeometryNodePointsToVolume',    'to_volume',          ret_class='Volume'   )
+        
+    # ----------------------------------------------------------------------------------------------------
+    # Specific code
+    
+    def gen_specific(self):
+        yield "\n"
+        yield "    def init_domains(self):\n"
+        yield "        self.point = PointDomain(self)\n"
 
 # -----------------------------------------------------------------------------------------------------------------------------
 # Instances
         
 class InstancesGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Instances', 'gn.Geometry')
-        
-        self.add_attribute('GeometryNodeInputIndex', 'instance_index', 'index', domain='INSTANCE')
+        super().__init__(nodes, 'Instances', 'gn.Geometry, Domain')
         
         self.add_call('STACK', 'GeometryNodeRotateInstances',    'rotate'    )
         self.add_call('STACK', 'GeometryNodeScaleInstances',     'scale'     )
@@ -1395,6 +1216,16 @@ class InstancesGen(DataClass):
         self.add_call('METHOD', 'GeometryNodeInstancesToPoints',  'to_points', ret_class='Points')
         
         self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_instances', domain = 'INSTANCE')
+        
+    def gen_specific(self):
+        yield "\n"
+        yield "    def init_socket(self):\n"
+        yield "        super().init_socket()\n"
+        yield "        self.domain = 'INSTANCE'\n"
+        
+        #yield "    def init_domains(self):\n"
+        #yield "        self.instances = Instances(self)\n\n"
+        
         
 # -----------------------------------------------------------------------------------------------------------------------------
 # Volume
@@ -1412,41 +1243,6 @@ class SplineGen(DataClass):
     def __init__(self, nodes):
         super().__init__(nodes, 'Spline', 'gn.Geometry')
         
-        # ----- Attributes captures
-        
-        self.add_attr_capture('GeometryNodeInputCurveHandlePositions',  'handle_positions',      default_domain='CURVE'  )
-        self.add_attr_capture('GeometryNodeInputTangent',               'tangent',               default_domain='CURVE'  )
-        self.add_attr_capture('GeometryNodeInputCurveTilt',             'tilt',                  default_domain='CURVE'  )
-        self.add_attr_capture('GeometryNodeCurveEndpointSelection',     'endpoint_selection',    default_domain='CURVE'  )
-        self.add_attr_capture('GeometryNodeCurveHandleTypeSelection',   'handle_type_selection', default_domain='CURVE'  )
-        self.add_attr_capture('GeometryNodeInputSplineCyclic',          'cyclic',                default_domain='CURVE'  )
-        self.add_attr_capture('GeometryNodeSplineLength',               'length',                default_domain='CURVE'  )
-        self.add_attr_capture('GeometryNodeSplineParameter',            'parameter',             default_domain='CURVE'  )
-        self.add_attr_capture('GeometryNodeInputSplineResolution',      'resolution',            default_domain='CURVE'  )
-        
-        # ----- Attributes
-        
-        self.add_attribute('GeometryNodeInputID',           'spline_ID',       'ID',               domain='SPLINE' )
-        self.add_attribute('GeometryNodeInputIndex',        'spline_index',    'index',            domain='SPLINE' )
-        self.add_attribute('GeometryNodeInputIndex',        'spline_position', 'position',         domain='SPLINE' )
-        
-        
-        meth_names = ['left_handle_position', 'right_handle_position']
-        self.add_attribute('GeometryNodeInputCurveHandlePositions',  meth_names,                'handle_positions',      domain='CURVE'  )
-
-        self.add_attribute('GeometryNodeInputTangent',               'tangent',                 'tangent',               domain='CURVE'  )
-        self.add_attribute('GeometryNodeInputCurveTilt',             'tilt',                    'tilt',                  domain='CURVE'  )
-        self.add_attribute('GeometryNodeCurveEndpointSelection',     'endpoint_selection',      'endpoint_selection',    domain='CURVE'  )
-        self.add_attribute('GeometryNodeCurveHandleTypeSelection',   'handle_type_selection',   'handle_type_selection', domain='CURVE'  )
-        self.add_attribute('GeometryNodeInputSplineCyclic',          'cyclic',                  'cyclic',                domain='CURVE'  )
-
-        meth_names = ['length', 'point_count']
-        self.add_attribute('GeometryNodeSplineLength',                meth_names,               'length',                domain='CURVE'  )
-
-        meth_names = ['factor', 'parameter_length', 'parameter_index']
-        self.add_attribute('GeometryNodeSplineParameter',            meth_names,                'parameter',             domain='CURVE'  )
-        self.add_attribute('GeometryNodeInputSplineResolution',      'resolution',              'resolution',            domain='CURVE'  )
-        
         # ----- Methods
         
         self.add_call('STACK', 'GeometryNodeSetSplineCyclic',              'set_cyclic'     )
@@ -1454,6 +1250,18 @@ class SplineGen(DataClass):
 
         self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_splines',   domain = 'SPLINE'  )
         
+    # ----------------------------------------------------------------------------------------------------
+    # Specific code
+    
+    def gen_specific(self):
+        yield "\n"
+        yield "    def init_domains(self):\n"
+        yield "        self.point  = PointDomain(self)\n"
+        yield "        self.spline = CurveDomain(self)\n\n"
+        
+        yield "    @property\n"
+        yield "    def control_point(self):\n"
+        yield "        return self.point\n"
         
 
 # -----------------------------------------------------------------------------------------------------------------------------
@@ -1476,18 +1284,6 @@ class CurveGen(DataClass):
 
         self.add_call('CONSTRUCTOR', 'GeometryNodeCurveArc',            'ArcFromRadius', mode = 'RADIUS')
         self.add_call('STATIC',      'GeometryNodeCurveArc',            'ArcFromPoints', mode = 'POINTS')
-        
-        
-        #self.add_attribute('GeometryNodeInputID',           'ID',               domains={'SPLINE'})
-        #self.add_attribute('GeometryNodeInputIndex',        'index',            domains={'SPLINE'})
-        
-        
-        #self.add_attribute('GeometryNodeCurveEndpointSelection',        'endpoint_selection',       capture=True, domains=['CURVE']  , no_prefix='CURVE')
-        #self.add_attribute('GeometryNodeCurveHandleTypeSelection',      'handle_type_selection',    capture=True, domains=['CURVE']  , no_prefix='CURVE')
-        #self.add_attribute('GeometryNodeInputCurveTilt',                'tilt',                     capture=True, domains=['CURVE']  , no_prefix='CURVE')
-        #self.add_attribute('GeometryNodeInputRadius',                   'radius',                   capture=True, domains=['CURVE']  , no_prefix='CURVE')
-        #self.add_attribute('GeometryNodeInputCurveHandlePositions',     'handle_positions',         capture=True, domains=['CURVE']  , 
-        #                   prop_names=('left_handle_position', 'right_handle_position'))
         
         self.add_call('STACK', 'GeometryNodeCurveSetHandles',          'set_handles'              )
         self.add_call('STACK', 'GeometryNodeCurveSplineType',          'set_spline_type'          )
