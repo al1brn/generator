@@ -876,6 +876,9 @@ class GlobalGen(DataClass):
         self.add_call('FUNCTION', 'GeometryNodeStringJoin',       meth_name="join_strings"        )
         
         self.add_call('FUNCTION', 'GeometryNodeInputSceneTime', 'scene')
+        self.add_call('FUNCTION', 'GeometryNodeSwitch', 'switch')
+        
+        
 
         blid = 'FunctionNodeBooleanMath'
         for op, meth_name in BOOL_MATH.items():
@@ -1177,6 +1180,21 @@ class MeshGen(DataClass):
         yield "    def face_corner(self):\n"
         yield "        return self.corner\n"
         
+        yield "    @property\n"
+        yield "    def verts(self):\n"
+        yield "        return self.point\n\n"
+        
+        yield "    @property\n"
+        yield "    def faces(self):\n"
+        yield "        return self.face\n"
+        
+        yield "    @property\n"
+        yield "    def edges(self):\n"
+        yield "        return self.edge\n\n"
+        
+        yield "    @property\n"
+        yield "    def corners(self):\n"
+        yield "        return self.corner\n"
         
         
 # -----------------------------------------------------------------------------------------------------------------------------
@@ -1198,7 +1216,11 @@ class PointsGen(DataClass):
     def gen_specific(self):
         yield "\n"
         yield "    def init_domains(self):\n"
-        yield "        self.point = PointDomain(self)\n"
+        yield "        self.point = PointDomain(self)\n\n"
+        
+        yield "    @property\n"
+        yield "    def points(self):\n"
+        yield "        return self.point\n"
 
 # -----------------------------------------------------------------------------------------------------------------------------
 # Instances
@@ -1220,11 +1242,11 @@ class InstancesGen(DataClass):
     def gen_specific(self):
         yield "\n"
         yield "    def init_socket(self):\n"
+        yield "        self.data_socket = self\n"  # Instances inherits from both DataSocket and Domain
         yield "        super().init_socket()\n"
         yield "        self.domain = 'INSTANCE'\n"
         
-        #yield "    def init_domains(self):\n"
-        #yield "        self.instances = Instances(self)\n\n"
+        
         
         
 # -----------------------------------------------------------------------------------------------------------------------------
@@ -1262,6 +1284,16 @@ class SplineGen(DataClass):
         yield "    @property\n"
         yield "    def control_point(self):\n"
         yield "        return self.point\n"
+        
+        yield "    @property\n"
+        yield "    def points(self):\n"
+        yield "        return self.point\n"
+
+        yield "    @property\n"
+        yield "    def splines(self):\n"
+        yield "        return self.spline\n"
+
+        
         
 
 # -----------------------------------------------------------------------------------------------------------------------------

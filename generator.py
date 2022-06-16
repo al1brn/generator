@@ -1942,7 +1942,7 @@ def create_geonodes(fpath):
         section.id = name
         section.md_file = f"{name}.md"
     
-    for name in ["NodeGroup", "GroupInput", "GroupOutput", "Viewer", "Frame", "SceneTime"]:
+    for name in ["GroupIO", "GroupInput", "GroupOutput", "Viewer", "Frame", "SceneTime", "Group"]:
         section = Section.FromParserDoc(parent=nodes_doc, prefix = "Node", pdoc=node_doc[name])
         section.id = name
         section.md_file = f"{name}.md"
