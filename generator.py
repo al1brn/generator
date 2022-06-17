@@ -977,10 +977,12 @@ class WSockets(list):
             if len(wsocks) == 1:
                 self.unames[name] = wsocks[0]
             else:
-                class_name = wsocks[0].class_name
-                distinction = 'HOMONYMS'
+                class_name    = wsocks[0].class_name
+                display_shape = wsocks[0].bsocket.display_shape
+                distinction   = 'HOMONYMS'
+                
                 for wsock in wsocks:
-                    if wsock.class_name != class_name:
+                    if (wsock.class_name != class_name) or (wsock.bsocket.display_shape != display_shape):
                         self.unames[wsock.name] = wsocks
                         distinction = 'SHARED'
                         break
@@ -1554,7 +1556,7 @@ class WNode:
         #
         # super().__init__(bl_idname, name, label)
         
-        yield _2_ + f"super().__init__('{self.bl_idname}', name='{self.bnode.name}', label=label, node_color=node_color)"
+        yield _2_ + f"super().__init__('{self.bl_idname}', name='{self.bnode.name}', label=label, node_color=node_color)\n"
 
         # ---------------------------------------------------------------------------
         # Parameters
@@ -1562,23 +1564,47 @@ class WNode:
         # self.bnode.data_type = data_type
         
         yield_comment = True
-        if False:
-            yield _2_ + "self.parameters = ["
-            sep = ""
-            for name in self.parameters:
-                yield f"{sep}'{name}'"
-                sep = ", "
-            yield "]"
-        
         for name, param in self.parameters.items():
             if yield_comment:
-                yield _2_ + "# Parameters\n"
+                if self.has_shared_sockets:
+                    yield _2_ + "# Node parameters to configure the sockets enablement\n"
+                else:
+                    yield _2_ + "# Node parameters\n"
                 yield_comment = False
             
             yield _2_ + f"self.bnode.{param.name:15s} = {name}"
         
         if not yield_comment:
             yield "\n"
+            
+        # ---------------------------------------------------------------------------
+        # Input and output socket unique names towards indices
+        # Node insockets and outsockets provide the index (or list of indices) for each socket uname
+        # - outsockets is used by getattr to get the output sockets by their name
+        # - insockets is used by setattr to plug in input sockets
+        #self.insockets  = {}
+        #self.outsockets = {}
+        
+        yield _2_ + "# Input and output sockets names (for use in __getattr__ and __setattr__)\n"
+        
+        yield _2_ + "self.insockets = {"
+        for uname, wsocks in self.inputs.unames.items():
+            if isinstance(wsocks, list):
+                yield f"'{uname}' : {[ws.index for ws in wsocks]}, "
+            else:
+                yield f"'{uname}' : {wsocks.index}, "
+        yield "}"
+        
+        
+        yield _2_ + "self.outsockets = {"
+        for uname, wsocks in self.outputs.unames.items():
+            if isinstance(wsocks, list):
+                yield f"'{uname}' : {[ws.index for ws in wsocks]}, "
+            else:
+                yield f"'{uname}' : {wsocks.index}, "
+        yield "}\n"
+        
+            
     
         # ---------------------------------------------------------------------------
         # Shared Input sockets
@@ -1595,6 +1621,8 @@ class WNode:
         # elif data_type == 'VECTOR':
         #     self.plug(1, value0)
         #     self.plug(3, value1)
+        
+        """
         
         yield_comment = True
         if self.has_shared_sockets:
@@ -1666,7 +1694,7 @@ class WNode:
                         yield _3_ + f"self.{uname:15s} = self.{self.outputs[idx].class_name}(self.bnode.outputs[{idx}])"
 
             yield "\n"
-        
+            
         # ---------------------------------------------------------------------------
         # Other output sockets
         #
@@ -1696,6 +1724,33 @@ class WNode:
         yield "}"
 
         yield "\n"
+        
+        """
+
+        # ---------------------------------------------------------------------------
+        # Now that the insockets are declared, we can set the input sockets
+        
+        yield_comment = True
+        for uname, wsocks in self.inputs.unames.items():
+            if yield_comment:
+                yield _2_ + "# Input sockets plugging\n"
+                yield_comment = False
+                
+            # Multi input hack
+            if not isinstance(wsocks, list):
+                if wsocks.is_multi_input:
+                    yield _2_ + f"self.plug({wsocks.index}, *{uname})"
+                    continue
+            
+            yield _2_ + f"self.{uname:15s} = {uname}"
+
+        if not yield_comment:
+            yield "\n"
+        
+        
+        
+        
+        
     
         # ---------------------------------------------------------------------------
         # Wrap the parameters
@@ -1942,7 +1997,7 @@ def create_geonodes(fpath):
         section.id = name
         section.md_file = f"{name}.md"
     
-    for name in ["GroupIO", "GroupInput", "GroupOutput", "Viewer", "Frame", "SceneTime", "Group"]:
+    for name in ["CustomGroup", "Group", "GroupInput", "GroupOutput", "Viewer", "Frame", "SceneTime"]:
         section = Section.FromParserDoc(parent=nodes_doc, prefix = "Node", pdoc=node_doc[name])
         section.id = name
         section.md_file = f"{name}.md"
