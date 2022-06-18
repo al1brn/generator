@@ -144,7 +144,7 @@ MULTI_CLASSES_NODES = { # Function name and is an attribute. If it is an attribu
     'FunctionNodeRandomValue'        : ('Random',              False ), # ('FLOAT', 'INT', 'FLOAT_VECTOR', 'BOOLEAN')
     'GeometryNodeAccumulateField'    : ('accumulate_field',    False ), # ('FLOAT', 'INT', 'FLOAT_VECTOR')
     'GeometryNodeAttributeStatistic' : ('attribute_statistic', True  ), # ('FLOAT', 'FLOAT_VECTOR')
-    'GeometryNodeAttributeTransfer'  : ('transfer_attribute',  True  ), # ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BOOLEAN')
+    #'GeometryNodeAttributeTransfer'  : ('transfer_attribute',  True  ), # ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BOOLEAN')
     'GeometryNodeCaptureAttribute'   : ('capture_attribute',   True  ), # ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BOOLEAN')
     'GeometryNodeFieldAtIndex'       : ('field_at_index',      False ), # ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BOOLEAN')
     'GeometryNodeRaycast'            : ('raycast',             True  ), # ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BOOLEAN')
@@ -185,6 +185,7 @@ class NodeCall:
     
     @classmethod
     def Property(cls, wnode, class_name, meth_name, settable=False, main_prop_name=None, output_index = 0, **fixed):
+        
         nc = cls('PROPERTY', wnode, class_name, meth_name, **fixed)
         
         if main_prop_name is None:
@@ -227,7 +228,16 @@ class NodeCall:
             
         else:
             if self.family == 'PROPERTY' and not self.is_main_prop:
-                uname = list(unames.keys())[self.output_index]
+                try:
+                    uname = self.wnode.outputs[self.output_index].uname
+                    #uname = list(unames.keys())[self.output_index]
+                except Exception as e:
+                    print(self.output_index)
+                    print(unames)
+                    print(self.wnode)
+                    print(self.wnode.outputs)
+                    print(test)
+                    raise e
                 ret_str = f"{uname} ({unames[uname]}) = {self.main_prop_name}.{uname}"
                 
             else:
@@ -295,10 +305,10 @@ class NodeCall:
                         #geo_socket = wsock.class_name
                     
             if self_name is None:
-                if class_name in ['Mesh', 'Points', 'Instances', 'Volume', 'Curve', 'Spline'] and geo_socket is not None:
+                if class_name in ['Mesh', 'Points', 'Instances', 'Volume', 'Curve'] and geo_socket is not None:
                     self_name = geo_socket
                 else:
-                    raise RuntimeError(f"The method {meth_name} on node {self.node_name} is {family}: it requires a self argument for class {class_name}.")
+                    raise RuntimeError(f"The method {meth_name} on node {self.wnode.node_name} is {family}: it requires a self argument for class {class_name}.")
                 
         # ---------------------------------------------------------------------------
         # Arguments
@@ -505,7 +515,9 @@ class NodeCall:
             
             else:
                 
-                sock_name = list(ret_unames)[self.output_index]
+                #sock_name = list(ret_unames)[self.output_index]
+                sock_name = self.wnode.outputs[self.output_index].uname
+                
                 yield _2_ + f"return self.{self.main_prop_name}.{sock_name}\n"
     
                 if self.prop_is_settable:
@@ -721,8 +733,20 @@ class DataClass:
         
         # ----- Several output sockets --> several properties
         
-        for index, prop_name in enumerate(prop_names):
+        # List: all the outputs are used, the index is the output socket index
+        if isinstance(prop_names, (list, tuple)):
+            dct = {prop_name: index for index, prop_name in enumerate(prop_names)}
+        else:
+            dct = prop_names
+            
+        # Dct: the outputs are not all used, the index is given by the key
+        for prop_name, index in dct.items():
             self.methods_.append(NodeCall.Property(self.wnodes[bl_idname], self.class_name, prop_name, settable=settable, main_prop_name=meth_name, output_index=index, **kwargs))
+
+        #for index, prop_name in enumerate(prop_names):
+        #    self.methods_.append(NodeCall.Property(self.wnodes[bl_idname], self.class_name, prop_name, settable=settable, main_prop_name=meth_name, output_index=index, **kwargs))
+        
+            
 
     # ----------------------------------------------------------------------------------------------------
     # Template
@@ -761,8 +785,7 @@ Blender version: {bpy.app.version_string}
 import geonodes as gn
 from geonodes.core import datasockets as dsock
 from geonodes.nodes import nodes
-from geonodes.core.domains import Domain
-from geonodes import PointDomain, EdgeDomain, FaceDomain, CornerDomain, CurveDomain
+import geonodes.core.domains as domains
 
 import logging
 logger = logging.Logger('geonodes')
@@ -1108,7 +1131,7 @@ class GeometryGen(DataClass):
         self.add_call('STACK', 'GeometryNodeStoreNamedAttribute',  'store_named_byte_color', data_type = 'BYTE_COLOR'  )
         self.add_call('STACK', 'GeometryNodeStoreNamedAttribute',  'store_named_boolean',    data_type = 'BOOLEAN'     )
         
-        self.add_call('METHOD', 'GeometryNodeAttributeDomainSize',  'attribute_domain_size' )
+        #self.add_call('METHOD', 'GeometryNodeAttributeDomainSize',  'attribute_domain_size' )
         self.add_call('METHOD', 'GeometryNodeRemoveAttribute',      'remove_named_attribute' )
         
         self.add_call('METHOD', 'GeometryNodeSeparateGeometry',     'components'            )
@@ -1135,6 +1158,13 @@ class MeshGen(DataClass):
         self.add_call('CONSTRUCTOR', 'GeometryNodeMeshIcoSphere'     ,'IcoSphere'  )
         self.add_call('CONSTRUCTOR', 'GeometryNodeMeshLine'          ,'Line'       )
         self.add_call('CONSTRUCTOR', 'GeometryNodeMeshUVSphere'      ,'UVSphere'   )
+        
+        # ----------------------------------------------------------------------------------------------------
+        # Properties
+        #                 - component : str (default = 'MESH') in ('MESH', 'POINTCLOUD', 'CURVE', 'INSTANCES')
+
+        self.add_property('GeometryNodeAttributeDomainSize', 'domain_size', settable=False,
+                          prop_names={'point_count' : 0, 'edge_count' : 1, 'face_count' : 2, 'corner_count' : 3}, component='MESH')
         
         # ----------------------------------------------------------------------------------------------------
         # Boolean operation
@@ -1167,34 +1197,26 @@ class MeshGen(DataClass):
     def gen_specific(self):
         yield "\n"
         yield "    def init_domains(self):\n"
-        yield "        self.point  = PointDomain(self)\n"
-        yield "        self.edge   = EdgeDomain(self)\n"
-        yield "        self.face   = FaceDomain(self)\n"
-        yield "        self.corner = CornerDomain(self)\n\n"
+        yield "        self.verts   = domains.Vertex(self)\n"
+        yield "        self.edges   = domains.Edge(self)\n"
+        yield "        self.faces   = domains.Face(self)\n"
+        yield "        self.corners = domains.Corner(self)\n\n"
         
         yield "    @property\n"
-        yield "    def vertex(self):\n"
-        yield "        return self.point\n\n"
+        yield "    def point(self):\n"
+        yield "        return self.verts\n\n"
         
         yield "    @property\n"
-        yield "    def face_corner(self):\n"
-        yield "        return self.corner\n"
+        yield "    def edge(self):\n"
+        yield "        return self.edges\n"
         
         yield "    @property\n"
-        yield "    def verts(self):\n"
-        yield "        return self.point\n\n"
+        yield "    def face(self):\n"
+        yield "        return self.faces\n"
         
         yield "    @property\n"
-        yield "    def faces(self):\n"
-        yield "        return self.face\n"
-        
-        yield "    @property\n"
-        yield "    def edges(self):\n"
-        yield "        return self.edge\n\n"
-        
-        yield "    @property\n"
-        yield "    def corners(self):\n"
-        yield "        return self.corner\n"
+        yield "    def corner(self):\n"
+        yield "        return self.corners\n\n"
         
         
 # -----------------------------------------------------------------------------------------------------------------------------
@@ -1203,6 +1225,14 @@ class MeshGen(DataClass):
 class PointsGen(DataClass):
     def __init__(self, nodes):
         super().__init__(nodes, 'Points', 'gn.Geometry')
+        
+        # ----------------------------------------------------------------------------------------------------
+        # Properties
+        #                 - component : str (default = 'MESH') in ('MESH', 'POINTCLOUD', 'CURVE', 'INSTANCES')
+
+        self.add_property('GeometryNodeAttributeDomainSize', 'domain_size', settable=False,
+                          prop_names={'point_count' : 0}, component='POINTCLOUD')
+        
         
         self.add_call('STACK',  'GeometryNodeSetPointRadius',    'set_radius'          )
         
@@ -1216,36 +1246,56 @@ class PointsGen(DataClass):
     def gen_specific(self):
         yield "\n"
         yield "    def init_domains(self):\n"
-        yield "        self.point = PointDomain(self)\n\n"
+        yield "        self.points = domains.CloudPoint(self)\n\n"
         
         yield "    @property\n"
-        yield "    def points(self):\n"
-        yield "        return self.point\n"
+        yield "    def point(self):\n"
+        yield "        return self.points\n"
 
 # -----------------------------------------------------------------------------------------------------------------------------
 # Instances
         
 class InstancesGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Instances', 'gn.Geometry, Domain')
+        super().__init__(nodes, 'Instances', 'gn.Geometry')
+        
+        # ----------------------------------------------------------------------------------------------------
+        # Constructors
+        
+        self.add_call('STATIC', 'GeometryNodeInstanceOnPoints',   'InstanceOnPoints')
+        self.add_call('STATIC', 'GeometryNodeGeometryToInstance', 'FromGeometries')
+        
+        
+        # ----------------------------------------------------------------------------------------------------
+        # Properties
+        #                 - component : str (default = 'MESH') in ('MESH', 'POINTCLOUD', 'CURVE', 'INSTANCES')
+
+        self.add_property('GeometryNodeAttributeDomainSize', 'domain_size', settable=False,
+                          prop_names={'instance_count' : 5}, component='INSTANCES')
+        
         
         self.add_call('STACK', 'GeometryNodeRotateInstances',    'rotate'    )
         self.add_call('STACK', 'GeometryNodeScaleInstances',     'scale'     )
         self.add_call('STACK', 'GeometryNodeTranslateInstances', 'translate' )
-        self.add_call('STACK', 'GeometryNodeRealizeInstances',   'realize'   )
-        
-        
+
+        self.add_call('METHOD', 'GeometryNodeRealizeInstances',   'realize'   )
         self.add_call('METHOD', 'GeometryNodeInstancesToPoints',  'to_points', ret_class='Points')
-        
-        self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_instances', domain = 'INSTANCE')
+        self.add_call('METHOD', 'GeometryNodeDuplicateElements',  'duplicate_instances', domain = 'INSTANCE')
         
     def gen_specific(self):
         yield "\n"
-        yield "    def init_socket(self):\n"
-        yield "        self.data_socket = self\n"  # Instances inherits from both DataSocket and Domain
-        yield "        super().init_socket()\n"
-        yield "        self.domain = 'INSTANCE'\n"
+        yield "    def init_domains(self):\n"
+        yield "        self.insts = domains.Instance(self)\n\n"
         
+        yield "    @property\n"
+        yield "    def instance(self):\n"
+        yield "        return self.insts\n\n"
+        
+        yield """
+    @staticmethod
+    def FromGeometriesOLD(*geometries):
+        return nodes.GeometryToInstance(*geometries).instances
+        """
         
         
         
@@ -1259,49 +1309,11 @@ class VolumeGen(DataClass):
         self.add_call('METHOD', 'GeometryNodeVolumeToMesh', 'to_mesh' , ret_class='Mesh')
         
 # -----------------------------------------------------------------------------------------------------------------------------
-# Spline
-
-class SplineGen(DataClass):
-    def __init__(self, nodes):
-        super().__init__(nodes, 'Spline', 'gn.Geometry')
-        
-        # ----- Methods
-        
-        self.add_call('STACK', 'GeometryNodeSetSplineCyclic',              'set_cyclic'     )
-        self.add_call('STACK', 'GeometryNodeSetSplineResolution',          'set_resolution' )
-
-        self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_splines',   domain = 'SPLINE'  )
-        
-    # ----------------------------------------------------------------------------------------------------
-    # Specific code
-    
-    def gen_specific(self):
-        yield "\n"
-        yield "    def init_domains(self):\n"
-        yield "        self.point  = PointDomain(self)\n"
-        yield "        self.spline = CurveDomain(self)\n\n"
-        
-        yield "    @property\n"
-        yield "    def control_point(self):\n"
-        yield "        return self.point\n"
-        
-        yield "    @property\n"
-        yield "    def points(self):\n"
-        yield "        return self.point\n"
-
-        yield "    @property\n"
-        yield "    def splines(self):\n"
-        yield "        return self.spline\n"
-
-        
-        
-
-# -----------------------------------------------------------------------------------------------------------------------------
 # Curve 
         
 class CurveGen(DataClass):
     def __init__(self, nodes):
-        super().__init__(nodes, 'Curve', 'gn.Spline')
+        super().__init__(nodes, 'Curve', 'gn.Geometry')
         
         self.add_call('CONSTRUCTOR', 'GeometryNodeCurvePrimitiveBezierSegment', 'BezierSegment'     )
         self.add_call('CONSTRUCTOR', 'GeometryNodeCurvePrimitiveCircle',        'Circle'            )
@@ -1317,9 +1329,18 @@ class CurveGen(DataClass):
         self.add_call('CONSTRUCTOR', 'GeometryNodeCurveArc',            'ArcFromRadius', mode = 'RADIUS')
         self.add_call('STATIC',      'GeometryNodeCurveArc',            'ArcFromPoints', mode = 'POINTS')
         
+        # ----------------------------------------------------------------------------------------------------
+        # Properties
+        #                 - component : str (default = 'MESH') in ('MESH', 'POINTCLOUD', 'CURVE', 'INSTANCES')
+
+        self.add_property('GeometryNodeAttributeDomainSize', 'domain_size', settable=False,
+                          prop_names={'point_count' : 0, 'spline_count' : 4}, component='CURVE')
+        
+        
+        self.add_call('STACK', 'GeometryNodeSetSplineCyclic',          'set_cyclic'               )
+        self.add_call('STACK', 'GeometryNodeSetSplineResolution',      'set_resolution'           )
         self.add_call('STACK', 'GeometryNodeCurveSetHandles',          'set_handles'              )
         self.add_call('STACK', 'GeometryNodeCurveSplineType',          'set_spline_type'          )
-        self.add_call('STACK', 'GeometryNodeFillCurve',                'fill'                     )
         self.add_call('STACK', 'GeometryNodeFilletCurve',              'fillet'                   )
         self.add_call('STACK', 'GeometryNodeResampleCurve',            'resample'                 )
         self.add_call('STACK', 'GeometryNodeReverseCurve',             'reverse'                  )
@@ -1329,10 +1350,30 @@ class CurveGen(DataClass):
         self.add_call('STACK', 'GeometryNodeSubdivideCurve',           'subdivide'                )
         self.add_call('STACK', 'GeometryNodeTrimCurve',                'trim'                     )
         
-        self.add_call('METHOD', 'GeometryNodeCurveToMesh',             'to_mesh',     ret_class='Mesh')
-        self.add_call('METHOD', 'GeometryNodeCurveToPoints',           'to_points',   ret_class='Points')
-        self.add_call('METHOD', 'GeometryNodeSampleCurve',             'sample',      ret_class='NODE')
-        self.add_call('METHOD', 'GeometryNodeCurveLength',             'length',      ret_class='Float')
+        self.add_call('METHOD', 'GeometryNodeDuplicateElements',       'duplicate_splines',   domain = 'SPLINE'  )
+        self.add_call('METHOD', 'GeometryNodeFillCurve',               'fill',        ret_class='Mesh'   )
+        self.add_call('METHOD', 'GeometryNodeCurveToMesh',             'to_mesh',     ret_class='Mesh'   )
+        self.add_call('METHOD', 'GeometryNodeCurveToPoints',           'to_points',   ret_class='Points' )
+        self.add_call('METHOD', 'GeometryNodeSampleCurve',             'sample',      ret_class='NODE'   )
+        self.add_call('METHOD', 'GeometryNodeCurveLength',             'length',      ret_class='Float'  )
+        
+    # ----------------------------------------------------------------------------------------------------
+    # Specific code
+    
+    def gen_specific(self):
+        yield "\n"
+        yield "    def init_domains(self):\n"
+        yield "        self.points  = domains.ControlPoint(self)\n"
+        yield "        self.splines = domains.Spline(self)\n\n"
+        
+        yield "    @property\n"
+        yield "    def point(self):\n"
+        yield "        return self.points\n"
+        
+        yield "    @property\n"
+        yield "    def spline(self):\n"
+        yield "        return self.splines\n"
+        
         
 # -----------------------------------------------------------------------------------------------------------------------------
 # Texture
@@ -1393,7 +1434,7 @@ class ObjectGen(DataClass):
         
 
 DATA_CLASSES = [GlobalGen, BooleanGen, IntegerGen, FloatGen, VectorGen, ColorGen, StringGen,
-                GeometryGen, SplineGen, CurveGen, MeshGen, PointsGen, InstancesGen, VolumeGen,
+                GeometryGen, CurveGen, MeshGen, PointsGen, InstancesGen, VolumeGen,
                 CollectionGen, ObjectGen, TextureGen, MaterialGen, ImageGen]
 
 

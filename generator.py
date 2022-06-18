@@ -17,7 +17,7 @@ The geonodes implements two layers:
     - Sockets layer
         One class per data type:
             Basis data: Boolean, Integer, Float, Vector, Color, String
-            Geometry  : Geometry, Spline, Curve, Mesh, Point, Instance, Volume
+            Geometry  : Geometry, Curve, Mesh, Point, Instance, Volume
             Special   : Collection, Object, Material, Texture, Image
         The methods and properties of the sockets are implemented by creating nodes:
             circle = Mesh.Circle(radius=2.) --> creates the node GeometryNodeMeshCircle
@@ -75,15 +75,7 @@ Implements the base class for DataSockets
 All the classes are base on geonode.node.DataSocket
 
 For geometry data, only the class Geometry is implemented in this module
-The final classes will be created in geonodes.sockets with the following inheritance
-
-Geometry
-    - Spline
-        - Curve
-    - Mesh
-        - Points
-        - Instance
-        - Volume
+The final classes will be created in geonodes.sockets
         
 ----- geonodes.core.colors
 
@@ -907,7 +899,7 @@ class WSocket:
         self.class_name = WSocket.SOCKET_CLASSES[self.bsocket.bl_idname][0]
         self.domain_data_type = WSocket.DOMAIN_DATA_TYPES.get(self.class_name)
         if self.class_name == 'Geometry':
-            if self.name.lower() in ['mesh', 'points', 'instances', 'volume', 'spline', 'curve']:
+            if self.name.lower() in ['mesh', 'points', 'instances', 'volume', 'curve']:
                 self.class_name = self.name.capitalize()
                 
     def __repr__(self):
@@ -1603,129 +1595,6 @@ class WNode:
             else:
                 yield f"'{uname}' : {wsocks.index}, "
         yield "}\n"
-        
-            
-    
-        # ---------------------------------------------------------------------------
-        # Shared Input sockets
-        # if the node has shared sockets, two loops:
-        # - loop on the possible values of the driving parameter
-        # - loop on the shared input sockets
-        #
-        # inputs.shared_sockets: {socket.uname: [wsockets...]}
-        # inputs.unames_indices: {socket.uname: {param value: index}}
-        #
-        # if data_type == 'FLOAT':
-        #     self.plug(0, value0)
-        #     self.plug(2, value1)
-        # elif data_type == 'VECTOR':
-        #     self.plug(1, value0)
-        #     self.plug(3, value1)
-        
-        """
-        
-        yield_comment = True
-        if self.has_shared_sockets:
-            param = self.parameters[self.driving_param]
-            sif = "if"
-            for index, value in enumerate(param.values):
-                yield_if = True
-                for uname, valinds in self.inputs.unames_indices.items():
-                    idx = valinds.get(value)
-                    if idx is not None:
-                        
-                        if yield_comment:
-                            yield _2_ + "# Input sockets\n"
-                            yield_comment = False
-                        
-                        if yield_if:
-                            yield _2_ + f"{sif} {self.driving_param} == '{value}':"
-                            sif = "elif"
-                            yield_if = False
-                        yield _3_ + f"self.plug({idx}, {uname})"
-            yield "\n"
-
-        # ---------------------------------------------------------------------------
-        # Other input sockets
-        #
-        # self.plug(4, factor)
-        
-        for arg in args:
-            if not arg.is_socket or arg.is_shared:
-                continue
-            
-            if yield_comment:
-                yield _2_ + "# Input sockets\n"
-                yield_comment = False
-            
-            yield _2_ + arg.splug
-
-        if not yield_comment:
-            yield "\n"
-        
-        # ---------------------------------------------------------------------------
-        # Shared outputs sockets
-        #
-        # See shared input sockets
-        #
-        # if data_type == 'FLOAT':
-        #     self.value = self.Float(self.bnode.outputs[0])
-        # elif data_type == 'VECTOR':
-        #     self.value = self.Vector(self.bnode.outputs[1])
-        
-        yield_comment = True
-        if self.has_shared_sockets:
-            param = self.parameters[self.driving_param]
-            sif = "if"
-            for index, value in enumerate(param.values):
-                yield_if = True
-                for uname, valinds in self.outputs.unames_indices.items():
-                    idx = valinds.get(value)
-                    if idx is not None:
-                        
-                        if yield_comment:
-                            yield _2_ + "# Output sockets\n"
-                            yield_comment = False
-                        
-                        if yield_if:
-                            yield _2_ + f"{sif} {self.driving_param} == '{value}':"
-                            sif = "elif"
-                            yield_if = False
-                        yield _3_ + f"self.{uname:15s} = self.{self.outputs[idx].class_name}(self.bnode.outputs[{idx}])"
-
-            yield "\n"
-            
-        # ---------------------------------------------------------------------------
-        # Other output sockets
-        #
-        # self.fac = self.Float(self.bnode.outputs[2])
-        
-        socks = []
-        for wsocket in self.outputs:
-            
-            if not wsocket.uname in socks:
-                socks.append(wsocket.uname)
-                
-            if wsocket.uname in self.outputs.shared_sockets:
-                continue
-            
-            if yield_comment:
-                yield _2_ + "# Output sockets\n"
-                yield_comment = False
-            
-            idx = wsocket.index
-            yield _2_ + f"self.{wsocket.uname:15s} = self.{self.outputs[idx].class_name}(self.bnode.outputs[{idx}])"
-            
-        yield _2_ + "self.output_sockets  = {"
-        sep = ""
-        for sock in socks:
-            yield f"{sep}'{sock}': self.{sock}"
-            sep = ", "
-        yield "}"
-
-        yield "\n"
-        
-        """
 
         # ---------------------------------------------------------------------------
         # Now that the insockets are declared, we can set the input sockets
@@ -1742,14 +1611,10 @@ class WNode:
                     yield _2_ + f"self.plug({wsocks.index}, *{uname})"
                     continue
             
-            yield _2_ + f"self.{uname:15s} = {uname}"
+            yield _2_ + f"if {uname:15s} is not None: self.{uname:15s} = {uname}"
 
         if not yield_comment:
             yield "\n"
-        
-        
-        
-        
         
     
         # ---------------------------------------------------------------------------
@@ -2015,7 +1880,7 @@ def create_geonodes(fpath):
 
     # ----- Parse domains.py
         
-    for name in ["Domain", "PointDomain", "EdgeDomain", "FaceDomain", "CornerDomain", "CurveDomain"]:
+    for name in ["Domain", "Vertex", "Edge", "Face", "Corner", "ControlPoint", "Spline", "CloudPoint", "Instance"]:
         section = Section.FromParserDoc(parent=core_doc, prefix = "Class", pdoc=parsed_domains[name])
         section.id = name
         section.md_file = f"{name}.md"
