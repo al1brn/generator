@@ -658,8 +658,9 @@ class DataClass:
         
         blid    = 'FunctionNodeCompare'
         val_ops = ('LESS_THAN', 'LESS_EQUAL', 'GREATER_THAN', 'GREATER_EQUAL', 'EQUAL', 'NOT_EQUAL')
-        str_ops = ('ELEMENT', 'LENGTH', 'AVERAGE', 'DOT_PRODUCT', 'DIRECTION')
+        vec_ops = ('ELEMENT', 'LENGTH', 'AVERAGE', 'DOT_PRODUCT', 'DIRECTION')
         col_ops = ('EQUAL', 'NOT_EQUAL', 'BRIGHTER', 'DARKER')
+        str_ops = ('EQUAL', 'NOT_EQUAL')
         
         if self.class_name == 'Integer':
             for op in val_ops:
@@ -671,7 +672,7 @@ class DataClass:
                 
         elif self.class_name == 'Vector':
             modes = ('ELEMENT', 'LENGTH', 'AVERAGE', 'DOT_PRODUCT', 'DIRECTION')
-            for op in val_ops:
+            for op in vec_ops:
                 self.add_call('METHOD', blid, op.lower(), data_type='VECTOR', operation=op)
                 
         elif self.class_name == 'String':
@@ -840,6 +841,14 @@ logger = logging.Logger('geonodes')
             yield indent + line
             indent = _1_
         yield _1_ + '"""' + "\n"
+        
+        # ----------------------------------------------------------------------------------------------------
+        # Copy
+        
+        if not self.is_global:
+            yield _0_ + _1_ +  "def copy(self):"
+            yield _0_ + _2_ + f"return {self.class_name}(self)\n"
+            
         
         # ----------------------------------------------------------------------------------------------------
         # Specific
@@ -1070,7 +1079,8 @@ class StringGen(DataClass):
         # ----------------------------------------------------------------------------------------------------
         # Operation
 
-        self.add_call('METHOD', 'GeometryNodeStringJoin', meth_name="join", self_name="strings")        
+        # Implemented manually
+        # self.add_call('METHOD', 'GeometryNodeStringJoin', meth_name="join_strings", self_name="strings")        
         
         # ----------------------------------------------------------------------------------------------------
         # Methods
@@ -1274,12 +1284,12 @@ class InstancesGen(DataClass):
                           prop_names={'instance_count' : 5}, component='INSTANCES')
         
         
-        self.add_call('STACK', 'GeometryNodeRotateInstances',    'rotate'    )
-        self.add_call('STACK', 'GeometryNodeScaleInstances',     'scale'     )
-        self.add_call('STACK', 'GeometryNodeTranslateInstances', 'translate' )
+        self.add_call('STACK', 'GeometryNodeRotateInstances',    'rotate'     )
+        self.add_call('STACK', 'GeometryNodeScaleInstances',     'scale'      )
+        self.add_call('STACK', 'GeometryNodeTranslateInstances', 'translate'  )
 
         self.add_call('METHOD', 'GeometryNodeRealizeInstances',   'realize'   )
-        self.add_call('METHOD', 'GeometryNodeInstancesToPoints',  'to_points', ret_class='Points')
+        self.add_call('METHOD', 'GeometryNodeInstancesToPoints',  'to_points' )
         self.add_call('METHOD', 'GeometryNodeDuplicateElements',  'duplicate_instances', domain = 'INSTANCE')
         
     def gen_specific(self):
@@ -1291,13 +1301,6 @@ class InstancesGen(DataClass):
         yield "    def instance(self):\n"
         yield "        return self.insts\n\n"
         
-        yield """
-    @staticmethod
-    def FromGeometriesOLD(*geometries):
-        return nodes.GeometryToInstance(*geometries).instances
-        """
-        
-        
         
 # -----------------------------------------------------------------------------------------------------------------------------
 # Volume
@@ -1306,7 +1309,7 @@ class VolumeGen(DataClass):
     def __init__(self, nodes):
         super().__init__(nodes, 'Volume', 'gn.Geometry')
         
-        self.add_call('METHOD', 'GeometryNodeVolumeToMesh', 'to_mesh' , ret_class='Mesh')
+        self.add_call('METHOD', 'GeometryNodeVolumeToMesh', 'to_mesh' )
         
 # -----------------------------------------------------------------------------------------------------------------------------
 # Curve 
