@@ -642,23 +642,35 @@ class DataClass:
         
         for blid, spec in MULTI_CLASSES_NODES.items():
             wn = self.wnodes[blid]
-            if not self.data_type in wn.parameters[wn.driving_param].values:
+            
+            data_type = self.data_type
+            
+            # Switch domains are not standard
+            
+            if blid == 'GeometryNodeSwitch':
+                domains = {'FLOAT_VECTOR': 'VECTOR', 'FLOAT_COLOR': 'RGBA'}
+                if data_type in domains:
+                    data_type = domains[data_type]
+            
+            if not data_type in wn.parameters[wn.driving_param].values:
                 continue
             
             meth_name = spec[0]
             
-            fixed = {wn.driving_param: self.data_type}
+            fixed = {wn.driving_param: data_type}
             
             family = 'CONSTRUCTOR' if meth_name[0].upper() == meth_name[0] else 'METHOD'
             
             self.add_call(family, blid, meth_name, **fixed)
+            
             
         # ----------------------------------------------------------------------------------------------------
         # FunctionNodeCompare is a little bit complex !
         
         blid    = 'FunctionNodeCompare'
         val_ops = ('LESS_THAN', 'LESS_EQUAL', 'GREATER_THAN', 'GREATER_EQUAL', 'EQUAL', 'NOT_EQUAL')
-        vec_ops = ('ELEMENT', 'LENGTH', 'AVERAGE', 'DOT_PRODUCT', 'DIRECTION')
+        #vec_ops = ('ELEMENT', 'LENGTH', 'AVERAGE', 'DOT_PRODUCT', 'DIRECTION')
+        vec_ops = ('LESS_THAN', 'LESS_EQUAL', 'GREATER_THAN', 'GREATER_EQUAL', 'EQUAL', 'NOT_EQUAL')
         col_ops = ('EQUAL', 'NOT_EQUAL', 'BRIGHTER', 'DARKER')
         str_ops = ('EQUAL', 'NOT_EQUAL')
         
@@ -671,9 +683,13 @@ class DataClass:
                 self.add_call('METHOD', blid, op.lower(), data_type='FLOAT', operation=op, mode='ELEMENT')
                 
         elif self.class_name == 'Vector':
-            modes = ('ELEMENT', 'LENGTH', 'AVERAGE', 'DOT_PRODUCT', 'DIRECTION')
             for op in vec_ops:
                 self.add_call('METHOD', blid, op.lower(), data_type='VECTOR', operation=op)
+
+            modes = ('ELEMENT', 'LENGTH', 'AVERAGE', 'DOT_PRODUCT', 'DIRECTION')
+            for op in vec_ops:
+                for mode in modes:
+                    self.add_call('METHOD', blid, f"{mode.lower()}_{op.lower()}", data_type='VECTOR', operation=op, mode=mode)
                 
         elif self.class_name == 'String':
             for op in str_ops:
@@ -909,8 +925,6 @@ class GlobalGen(DataClass):
         
         self.add_call('FUNCTION', 'GeometryNodeInputSceneTime', 'scene')
         self.add_call('FUNCTION', 'GeometryNodeSwitch', 'switch')
-        
-        
 
         blid = 'FunctionNodeBooleanMath'
         for op, meth_name in BOOL_MATH.items():
@@ -1011,6 +1025,7 @@ class VectorGen(DataClass):
 
         self.add_call('CONSTRUCTOR', 'ShaderNodeCombineXYZ',            'Combine')
         self.add_call('CONSTRUCTOR', 'FunctionNodeAlignEulerToVector',  'AlignToVector')
+        self.add_call('CONSTRUCTOR', 'FunctionNodeRotateEuler',         'RotateEuler')
         
         # ----------------------------------------------------------------------------------------------------
         # Operations
@@ -1140,9 +1155,9 @@ class GeometryGen(DataClass):
         self.add_call('STACK', 'GeometryNodeStoreNamedAttribute',  'store_named_color',      data_type = 'FLOAT_COLOR' )
         self.add_call('STACK', 'GeometryNodeStoreNamedAttribute',  'store_named_byte_color', data_type = 'BYTE_COLOR'  )
         self.add_call('STACK', 'GeometryNodeStoreNamedAttribute',  'store_named_boolean',    data_type = 'BOOLEAN'     )
+        self.add_call('STACK', 'GeometryNodeRemoveAttribute',      'remove_named_attribute' )
         
         #self.add_call('METHOD', 'GeometryNodeAttributeDomainSize',  'attribute_domain_size' )
-        self.add_call('METHOD', 'GeometryNodeRemoveAttribute',      'remove_named_attribute' )
         
         self.add_call('METHOD', 'GeometryNodeSeparateGeometry',     'components'            )
         self.add_call('METHOD', 'GeometryNodeConvexHull',           'convex_hull'           )

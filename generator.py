@@ -1142,7 +1142,16 @@ class WNode:
         
         self.parameters = {}
         for param_name in dir(self.bnode):
-            if not param_name in WNode.STD_ATTRS:
+            
+            # type is valid for Node FunctionNodeRotateEuler
+            
+            ok_param = not param_name in WNode.STD_ATTRS
+            if bnode.bl_idname == 'FunctionNodeRotateEuler' and param_name == 'type':
+                ok_param = True
+                
+            # End of hack
+            
+            if ok_param:
                 param = Parameter(self, param_name)
                 if param.default is None:
                     continue
@@ -1522,15 +1531,75 @@ class WNode:
         
         section = self.documentation()
         self.node_doc = section
-        first = True
-        for line in section.gen_text(False):
-            if first:
-                yield _1_ + '"""' + line
-                first = False
-            else:
-                yield _1_ + line
+        
+        if False:
+            first = True
+            for line in section.gen_text(False):
+                if first:
+                    yield _1_ + '"""' + line
+                    first = False
+                else:
+                    yield _1_ + line
+                    
+            yield _1_ + '"""' + "\n"
+            
+        else:
+            yield _1_ + '"""' + f"Node *{self.bnode.name}*\n"
+            yield _1_ + "Args:"
+            
+            for uname, wsock in self.inputs.unames.items():
                 
-        yield _1_ + '"""' + "\n"
+                if isinstance(wsock, list):
+                    sval = f"``{self.driving_param}`` dependant"
+                elif wsock.is_multi_input:
+                    sval = f"*{wsock.class_name}"
+                else:
+                    sval = f"{wsock.class_name}"
+                    
+                yield _2_ + f"{uname} (DataSocket): {sval}"
+                
+            for name, param in self.parameters.items():
+                
+                stype = param.param_type
+                if stype == 'str':
+                    descr =f"Node parameter, default = '{param.default}'"
+                else:
+                    descr =f"Node parameter, default = {param.default}"
+                
+                if param.is_enum:
+                    descr += f" in {param.values}"
+                    
+                yield _2_ + f"{name} ({stype}): {descr}"
+            
+            yield _2_ + "node_color (color): Node color"
+            yield _2_ + "node_label (str): Node label"
+            yield _0_
+            
+            if self.outputs:
+                yield _0_ + _1_ + "Output sockets:"
+                for uname, wsock in self.outputs.unames.items():
+                    
+                    if isinstance(wsock, list):
+                        sval = f"``{self.driving_param}`` dependant"
+                    else:
+                        sval = wsock.class_name
+                            
+                    yield _2_ + f"- **{uname}** : {sval}"
+                    
+            
+            if self.has_shared_sockets:
+                
+                yield _0_ + _1_ + "Shared sockets:"
+                                         
+                yield _2_ + f"- Driving parameter : ``{self.driving_param}`` in {self.parameters[self.driving_param].values}"
+                yield _2_ + f"- Input sockets  : {list(self.inputs.shared_sockets.keys())}"
+                yield _2_ + f"- Output sockets : {list(self.outputs.shared_sockets.keys())}"
+                
+            yield _0_ + _1_ + f".. blid:: {self.bl_idname}"
+                    
+            yield _0_ + _1_ + '"""' + "\n"
+            
+            
     
         # ---------------------------------------------------------------------------
         # Constructor __init__
