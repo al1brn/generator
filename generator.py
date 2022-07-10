@@ -436,8 +436,6 @@ NODES_MENU = {
     "volume_to_mesh"             : ("volume"                    , "volume/volume_to_mesh"                 ),
     
     "group"                      : ("group"                     , "group"                                 ),
-    
-    
 }
 
 
@@ -504,20 +502,6 @@ class Argument:
         self.arg_type = arg_type
         self.name     = name
         self.is_self  = is_self
-    
-    def __init__OLD(self, name, value, quote_str_value=True, is_self=False, wsocket=None, param=None, is_fixed=False):
-        
-        self.name  = name
-        
-        if isinstance(value, str) and quote_str_value:
-            self.value = f"'{value}'"
-        else:
-            self.value = value
-        
-        self.is_self  = is_self
-        self.wsocket  = wsocket
-        self.param    = param
-        self.is_fixed = is_fixed
         
     @classmethod
     def Socket(cls, name, wsocket, is_self=False):
@@ -595,7 +579,10 @@ class Argument:
                 return self.name
             
         elif self.arg_type == 'OTHER':
-            return self.header_str
+            s = self.header_str
+            if s in ["node_label = None", "node_color = None"]:
+                return ""
+            return s
         
         else:
             raise RuntimeError(f"Unkwnon argument type: {self.arg_type}")
@@ -668,26 +655,63 @@ class Argument:
         if self.arg_type == 'CLS':
             return ""
         
-        if self.arg_type == 'OTHER':
-            if self.header_str == "":
-                return ""
-            else:
-                return self.header_str.replace('=', ':')
-        
-        s = f"{self.name} : "
-        if self.is_socket:
-            if self.is_multi:
-                s += "*"
-            s += self.wsocket.class_name
+        if True:
             if self.is_self:
-                s += " (self)"
-        else:
-            if self.param is None:
-                s += f"{self.value} ({type(self.value).__name__})"
+                return ""
+            
+            if self.arg_type == 'OTHER':
+                if self.header_str == "":
+                    return ""
+                else:
+                    s = self.header_str
+                    if s == "node_color = None":
+                        return "node_color (color): Node background color"
+                    elif s == "node_label = None":
+                        return "node_label (str): Node label"
+                    else:
+                        return self.header_str.replace('=', ':')
+                
+            s = f"{self.name}"
+            if self.is_socket:
+                s += ": "
+                if self.is_multi:
+                    s += "<m>"
+                s += self.wsocket.class_name
+
             else:
-                s += str(self.value)
-                if self.param.is_enum and not self.is_fixed:
-                    s += f" in {self.param.short_values}"
+                if self.param is None:
+                    return ""
+                    #s += f"({type(self.value).__name__}): {self.value}"
+                else:
+                    if self.is_fixed:
+                        return ""
+                    
+                    s += f" ({type(self.value).__name__}): {self.value}"
+                    if self.param.is_enum:
+                        s += f" in {self.param.short_values}"
+                
+            
+        else:
+            if self.arg_type == 'OTHER':
+                if self.header_str == "":
+                    return ""
+                else:
+                    return self.header_str.replace('=', ':')
+            
+            s = f"{self.name} : "
+            if self.is_socket:
+                if self.is_multi:
+                    s += "*"
+                s += self.wsocket.class_name
+                if self.is_self:
+                    s += " (self)"
+            else:
+                if self.param is None:
+                    s += f"{self.value} ({type(self.value).__name__})"
+                else:
+                    s += str(self.value)
+                    if self.param.is_enum and not self.is_fixed:
+                        s += f" in {self.param.short_values}"
                     
         return s
     
@@ -804,44 +828,47 @@ class Arguments(list):
     
     def documentation(self):
         
-        sections = {"Sockets": [], "Parameters": [], "Fixed parameters": []}
+        text = ""
+        _1_ = "\n        "
+        _2_ = _1_ + "    "
         
+        sockets = False
         for arg in self:
             
-            section = None
-            if arg.arg_type == 'OTHER':
-                if arg.header_str == "":
-                    s = arg.call_str
-                    section = sections["Fixed parameters"]
-                else:
-                    s = arg.header_str
-                    section = sections[ "Parameters"]
-                    
+            if arg.is_self:
+                continue
+            
+            if arg.is_param and arg.is_fixed:
+                continue
+                
+            else:
+                s = arg.scomment
                 if s == "":
                     continue
                 
-                section.append(s.replace("=", ":"))
-
-            else:
-                scomment = arg.scomment
-                if scomment == "":
-                    continue
-            
-                if arg.is_socket:
-                    sections["Sockets"].append(scomment)
-                elif arg.is_param:
-                    if arg.is_fixed:
-                        sections["Fixed parameters"].append(scomment)
-                    else:
-                        sections["Parameters"].append(scomment)
-                        
+                if not sockets:
+                    text += _1_ + "Args:"
+                    sockets = True
+                    
+                text += _2_ + s
+                    
+        return text
+    
+    # ---------------------------------------------------------------------------
+    # Fixed parameters
+    
+    def fixed_parameters(self):
+        
         text = ""
-        for section, lst in sections.items():
-            if lst:
-                lst.insert(0, f"## {section}")
-                text += "\n    - ".join(lst)
+        _1_ = "\n        "
+        
+        for arg in self:
+            if arg.is_param and arg.is_fixed:
+                text += _1_ + f"- {arg.name} = {arg.value}"
                 
         return text
+    
+
 
 # ====================================================================================================
 # Socket wrapper
@@ -1431,7 +1458,7 @@ class WNode:
                 if isinstance(wsock, list):
                     sval = f"{self.driving_param} dependant"
                 elif wsock.is_multi_input:
-                    sval = f"*{wsock.class_name}"
+                    sval = f"<m> {wsock.class_name}"
                 else:
                     sval = f"{wsock.class_name}"
                 
@@ -1545,6 +1572,7 @@ class WNode:
             
         else:
             yield _1_ + '"""' + f"Node *{self.bnode.name}*\n"
+            yield _1_ + f".. _{self.node_name}:\n"
             yield _1_ + "Args:"
             
             for uname, wsock in self.inputs.unames.items():
@@ -1552,7 +1580,7 @@ class WNode:
                 if isinstance(wsock, list):
                     sval = f"``{self.driving_param}`` dependant"
                 elif wsock.is_multi_input:
-                    sval = f"*{wsock.class_name}"
+                    sval = f"<m> {wsock.class_name}"
                 else:
                     sval = f"{wsock.class_name}"
                     
@@ -1800,7 +1828,9 @@ def create_nodes(fpath, BNODES):
 
 {QUOTES}
 Created on {date.today()}
+
 @author: Generated from generator module
+
 Blender version: {bpy.app.version_string}
 {QUOTES}
 

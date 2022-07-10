@@ -414,34 +414,32 @@ class NodeCall:
         section = Section(None, f"{meth_name}")
         section.family = FAMILIES[self.family][1]
         
-        text = f"""
+        text = f""" Geometry node [*{self.wnode.bnode.name}*].
+        
+        {args.documentation()}
 
-        > Node: [{self.wnode.node_name}](id:{self.wnode.node_name})
-        
-        <sub>go to: [top](#data-socket-{self.class_name.lower()}) [index](ref:index)
-        blender ref [{self.wnode.bl_idname}]({self.wnode.blender_python_ref})
-        node ref [{self.wnode.bnode.name}]({self.wnode.blender_ref}) </sub>
-                          
-        ```python
-        {sample}
-        ```
-        
-        Arguments
-        ---------
-            {args.documentation()}
-        
-        Node creation
-        -------------
-        
-        ```python
-        from geondes import nodes
-        {snode_call}
-        ``` 
-
-        Returns
-        -------
+        Returns:
             {sret}
+        
+        **Node creation**
+        
+        Node :class:`~geonodes.nodes.nodes.{self.wnode.node_name}`
+        {args.fixed_parameters()}
+
+        .. blid:: {self.wnode.bl_idname}
+        
+        .. code-block:: python
+        
+            from geonodes import nodes
+            {snode_call}
         """
+        
+        #**Example**
+        #
+        #.. code-block:: python
+        # 
+        #    {sample}
+        
         
         # ----- Remove temporarily the section title
         
@@ -628,6 +626,7 @@ class DataClass:
             """
         else:
             text = f"""
+            
             > Inherits from {self.super_class}
             
             <sub>go to [index](ref:index)</sub>
@@ -635,7 +634,6 @@ class DataClass:
             """
         
         self.class_doc.set_text(text)
-        
         
         # ----------------------------------------------------------------------------------------------------
         # Add the multi classes methods
@@ -850,13 +848,15 @@ logger = logging.Logger('geonodes')
             section = Section(self.class_doc, FAMILIES[family][1])
             text = "\n".join([nc.line_doc for nc in meths])
             section.set_text(text)
-        
-        first = True
-        indent = _1_ + '""" '
-        for line in self.class_doc.gen_text(False):
-            yield indent + line
-            indent = _1_
-        yield _1_ + '"""' + "\n"
+            
+        if False:
+            indent = _1_ + '""" '
+            for line in self.class_doc.gen_text(False):
+                yield indent + line
+                indent = _1_
+            yield _1_ + '"""' + "\n"
+        else:
+            yield _1_ + '"""' + f" Data class {self.class_name}" + _1_ + '"""'
         
         # ----------------------------------------------------------------------------------------------------
         # Copy
