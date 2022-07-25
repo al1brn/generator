@@ -1,0 +1,18 @@
+Release 1.01
+
+- Float * Vector:
+  - pb : the first type defined the result, here a Float
+  - Correction : operations on Float check if type cast is necessary
+  
+- Maths logical operation
+  - pb : Float.less_than(...)  is Float not Boolean
+  - Correction : Math nodes typed
+  
+- Add groups.clear()
+
+- Bug : Geometry.components declared twice (prop and function)
+
+- Creation of Geometry.points property
+  Point is a domain for all domains
+  
+- Splines.parameter transferred to ControlPoint.parameter

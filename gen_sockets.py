@@ -60,8 +60,8 @@ MATH = {
     'EXPONENT'           : ('exp'                 , 'Float'     ),
     'MINIMUM'            : ('min'                 , 'SAME'      ),
     'MAXIMUM'            : ('max'                 , 'SAME'      ),
-    'LESS_THAN'          : ('less_than'           , 'Boolean'   ),
-    'GREATER_THAN'       : ('greater_than'        , 'Boolean'   ),
+    'LESS_THAN'          : ('math_less_than'      , 'Boolean'   ),
+    'GREATER_THAN'       : ('math_greater_than'   , 'Boolean'   ),
     'SIGN'               : ('sign'                , 'Integer'   ),
     'COMPARE'            : ('compare'             , 'Boolean'   ),
     'SMOOTH_MIN'         : ('smooth_min'          , 'SAME'      ),
@@ -88,6 +88,7 @@ MATH = {
     'RADIANS'            : ('radians'             , 'Float'     ),
     'DEGREES'            : ('degrees'             , 'Float'     ),   
  }
+
 
 VECTOR_MATH = {
     'ADD'                : 'add',
@@ -492,6 +493,8 @@ class NodeCall:
         # @property
         # def curve_component(self):
         #     return self.components.curve
+        
+        #print(f"gen_call> {(self.class_name + '.' + self.meth_name):32s}, {family:10s} {self.ret_class}")
     
         if family == 'PROPERTY':
             
@@ -982,6 +985,12 @@ class IntegerGen(DataClass):
         
         blid = 'ShaderNodeMath'
         for op, spec in MATH.items():
+
+            # add, subtract, divide and multiply as implemented in class IntFloat
+            # to test Vector type
+            if op in ['ADD', 'SUBTRACT', 'DIVIDE', 'MULTIPLY']:
+                continue
+            
             ret_class = 'Integer' if spec[1] == 'SAME' else spec[1]
             self.add_call('METHOD', blid, spec[0], self_name="value0", ret_class=ret_class, operation=op)
 
@@ -998,6 +1007,13 @@ class FloatGen(DataClass):
         
         blid = 'ShaderNodeMath'
         for op, spec in MATH.items():
+
+            # add, subtract, divide and multiply as implemented in class IntFloat
+            # to test Vector type
+            if op in ['ADD', 'SUBTRACT', 'DIVIDE', 'MULTIPLY']:
+                continue
+
+
             ret_class = 'Float' if spec[1] == 'SAME' else spec[1]
             self.add_call('METHOD', blid, spec[0], ret_class=ret_class, operation=op)
 
@@ -1159,7 +1175,7 @@ class GeometryGen(DataClass):
         
         #self.add_call('METHOD', 'GeometryNodeAttributeDomainSize',  'attribute_domain_size' )
         
-        self.add_call('METHOD', 'GeometryNodeSeparateGeometry',     'components'            )
+        self.add_call('METHOD', 'GeometryNodeSeparateGeometry',     'separate_geometry'     )
         self.add_call('METHOD', 'GeometryNodeConvexHull',           'convex_hull'           )
         self.add_call('METHOD', 'GeometryNodeGeometryToInstance',   'to_instance'           )
         self.add_call('METHOD', 'GeometryNodeJoinGeometry',         'join'                  )
@@ -1310,7 +1326,7 @@ class InstancesGen(DataClass):
     def gen_specific(self):
         yield "\n"
         yield "    def init_domains(self):\n"
-        yield "        self.insts = domains.Instance(self)\n\n"
+        yield "        self.insts  = domains.Instance(self)\n\n"
         
         yield "    @property\n"
         yield "    def instance(self):\n"
