@@ -272,7 +272,7 @@ class NodeCall:
         meth_name   = self.meth_name
         self_name   = self.self_name
         fixed       = self.fixed
-
+        
         # ---------------------------------------------------------------------------
         # Configure the node to steer the enablement
 
@@ -389,6 +389,8 @@ class NodeCall:
         # Node call string
         
         snode_call = f"nodes.{self.wnode.node_name}({args.scall})"
+        if self.out_name is not None:
+            snode_call += f".{self.out_name}"
         
         # ----------------------------------------------------------------------------------------------------
         # Comment
@@ -411,6 +413,9 @@ class NodeCall:
         else:
             s = ", ".join([f"{uname} ({ret_unames[uname]})" for uname in ret_unames])
             sret = f"Sockets [{s}]"
+            
+        if self.out_name is not None:
+            sret = f"{self.out_name} in {sret}"
         
         section = Section(None, f"{meth_name}")
         section.family = FAMILIES[self.family][1]
@@ -516,7 +521,6 @@ class NodeCall:
             
             else:
                 
-                #sock_name = list(ret_unames)[self.output_index]
                 sock_name = self.wnode.outputs[self.output_index].uname
                 
                 yield _2_ + f"return self.{self.main_prop_name}.{sock_name}\n"
@@ -1460,7 +1464,12 @@ class ObjectGen(DataClass):
     def __init__(self, nodes):
         super().__init__(nodes, 'Object', 'dsock.Object')
 
-        self.add_property('GeometryNodeObjectInfo', 'info', prop_names = ['location', 'rotation', 'scale', 'geometry'])
+        #self.add_property('GeometryNodeObjectInfo', 'info', prop_names = ['location', 'rotation', 'scale', 'geometry'])
+        self.add_call('METHOD', 'GeometryNodeObjectInfo', 'info')
+        self.add_call('METHOD', 'GeometryNodeObjectInfo', 'location', out_name='location')
+        self.add_call('METHOD', 'GeometryNodeObjectInfo', 'rotation', out_name='rotation')
+        self.add_call('METHOD', 'GeometryNodeObjectInfo', 'scale',    out_name='scale')
+        self.add_call('METHOD', 'GeometryNodeObjectInfo', 'geometry', out_name='geometry')
 
 
 # =============================================================================================================================
