@@ -16,3 +16,8 @@ Release 1.01
   Point is a domain for all domains
   
 - Splines.parameter transferred to ControlPoint.parameter
+
+- Bug Object properties info, location, scale, rotation, geometry transformed in methods
+  One socket and one parameter prevents these to be properties
+  
+- Bug extrude : return domain selction and selected faces

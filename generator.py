@@ -2099,9 +2099,127 @@ def node_sizes():
         print(f"    {s:42s}: {re.findall(pat, str(bnode.dimensions))[0]},")
         
     print()
-        
-
     
+# ====================================================================================================
+# Take the nodes details for future comparison
+
+def finger_print(fpath=None):
+
+    version = bpy.app.version_string
+    print("="*80)
+    print(f"Taking finger print of geometry nodes, Blender version: {version}")
+    print()
+
+    btree_nodes = bpy.data.node_groups["Geometry Nodes"].nodes
+    btree_nodes.clear()
+    
+    # ----- Read the nodes
+    
+    nodes = {'VERSION': version}
+
+    for tp in dir(bpy.types):
+        if tp.find('Legacy') < 0:
+            try:
+                bnode = btree_nodes.new(tp)
+            except:
+                continue
+            
+            wnode = WNode(bnode)
+            
+            nodes[tp] = {
+                'inputs'  : [(socket.name, socket.bl_idname) for socket in bnode.inputs],
+                'outputs' : [(socket.name, socket.bl_idname) for socket in bnode.outputs],
+                'params'  : [name for name in wnode.parameters]
+                }
+            
+    # ----- Write in file and compare to last
+            
+    if fpath is not None:
+    
+        # ----- Write
+            
+        with open(f"{fpath}version {version}.txt", 'w') as f:
+
+            f.write(pformat(nodes, width=80))
+            
+        # ----- Load last
+            
+        with open(f"{fpath}version last.txt", 'r') as f:
+            last = eval(f.read())
+            
+        # ----- Comparizon
+            
+        new_nodes = []
+        mod_nodes = []
+        
+        print()
+        print('-'*80)
+        print(f"Changes compared to last version {last['VERSION']}")
+        print()
+        count = 0
+            
+        for new_name, new_node in nodes.items():
+            
+            if new_name == 'VERSION':
+                continue
+            
+            old_node = last.get(new_name)
+            if old_node is None:
+                count += 1
+                new_nodes.append(new_name)
+                continue
+            
+            ok = True
+            for k in ['inputs', 'outputs', 'params']:
+                if new_node[k] != old_node[k]:
+                    
+                    print(f"   Changes {k:7s} {new_name}")
+
+                    diff = []
+                    for v in old_node[k]:
+                        if v not in new_node[k]:
+                            diff.append(v)
+                    print("     Suppressed: ", diff)
+                        
+                    diff = []
+                    for v in new_node[k]:
+                        if v not in old_node[k]:
+                            diff.append(v)
+                    print("     Created   : ", diff)
+                    print()
+                    
+                    mod_nodes.append(new_name)
+                    count += 1
+                    
+        # ----- Synthesis of changes
+                    
+        print()
+        print('-'*80)
+        print("Synthesis")
+        print()
+        
+        if count == 0:
+            print("> No change")
+            print()
+
+        else:
+            if mod_nodes:
+                print("> Modified nodes:")
+                for name in mod_nodes:
+                    print(f"     {name}")
+                print()
+                
+            if new_nodes:
+                print("> New nodes:")
+                for name in new_nodes:
+                    print(f"     {name}")
+                print()
+            
+        print("Done")
+        
+    # ----- Done
+        
+    return nodes
     
 
     

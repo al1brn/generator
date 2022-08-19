@@ -935,7 +935,7 @@ class GlobalGen(DataClass):
 
         blid = 'FunctionNodeBooleanMath'
         for op, meth_name in BOOL_MATH.items():
-            self.add_call('FUNCTION', blid, meth_name, blend_type=op)
+            self.add_call('FUNCTION', blid, meth_name, operation=op)
         
         blid = 'ShaderNodeMath'
         for op, spec in MATH.items():
@@ -1480,8 +1480,6 @@ DATA_CLASSES = [GlobalGen, BooleanGen, IntegerGen, FloatGen, VectorGen, ColorGen
                 GeometryGen, CurveGen, MeshGen, PointsGen, InstancesGen, VolumeGen,
                 CollectionGen, ObjectGen, TextureGen, MaterialGen, ImageGen]
 
-
-#DATA_CLASSES = [BooleanGen]
 
      
 
