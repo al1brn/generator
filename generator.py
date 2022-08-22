@@ -1645,7 +1645,7 @@ class WNode:
         #
         # super().__init__(bl_idname, name, label)
         
-        yield _2_ + f"super().__init__('{self.bl_idname}', name='{self.bnode.name}', label=label, node_color=node_color)\n"
+        yield _2_ + f"super().__init__('{self.bl_idname}', node_name='{self.bnode.name}', label=label, node_color=node_color)\n"
 
         # ---------------------------------------------------------------------------
         # Parameters
@@ -1712,7 +1712,6 @@ class WNode:
 
         if not yield_comment:
             yield "\n"
-        
     
         # ---------------------------------------------------------------------------
         # Wrap the parameters
@@ -1726,6 +1725,28 @@ class WNode:
                 yield _1_ + f"@{param.uname}.setter"
                 yield _1_ + f"def {param.uname}(self, value):"
                 yield _2_ + f"self.bnode.{name} = value\n"
+                
+        # ---------------------------------------------------------------------------
+        # Output sockets
+        
+        for name in self.outputs.unames:
+            yield _1_ + "@property"
+            yield _1_ + f"def {name}(self):"
+            yield _2_ + f"return self.get_output_socket('{name}')\n"
+            
+        # ---------------------------------------------------------------------------
+        # Input sockets
+        
+        for name in self.inputs.unames:
+            if name not in self.outputs.unames:
+                yield _1_ + "@property"
+                yield _1_ + f"def {name}(self):"
+                s = f"Attribute error on node '{self.node_name}': the input socket '{name}' is write only."
+                yield _2_ + 'raise AttributeError("' + s + '")\n'
+                
+            yield _1_ + f"@{name}.setter"
+            yield _1_ + f"def {name}(self, value):"
+            yield _2_ + f"self.set_input_socket('{name}', value)\n"
 
         
 # ====================================================================================================
@@ -2006,7 +2027,6 @@ def create_geonodes(fpath):
             for line in section.gen_text(True):
                 f.write(line + "\n")
 
-                
     # ----- Index
 
     print("Index...")

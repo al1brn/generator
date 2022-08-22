@@ -1055,9 +1055,10 @@ class VectorGen(DataClass):
             self.add_call('METHOD', blid, meth_name, operation=op)
 
         # ----------------------------------------------------------------------------------------------------
-        # x, y, z properties
+        # separate property used by properties x, y, and z
         
-        self.add_property('ShaderNodeSeparateXYZ', 'separate', settable=True, prop_names=['x', 'y', 'z'])
+        #self.add_property('ShaderNodeSeparateXYZ', 'separate', settable=True, prop_names=['x', 'y', 'z'])
+        self.add_property('ShaderNodeSeparateXYZ', 'separate')
 
         # ----------------------------------------------------------------------------------------------------
         # Methods
@@ -1088,9 +1089,10 @@ class ColorGen(DataClass):
             self.add_call('METHOD', blid, meth_name, self_name="color1", blend_type=op)
         
         # ----------------------------------------------------------------------------------------------------
-        # r, g, b properties
+        # separate property used by properties r, g and b
         
-        self.add_property('ShaderNodeSeparateRGB', 'separate', settable=True, prop_names = ['r', 'g', 'b'])
+        #self.add_property('ShaderNodeSeparateRGB', 'separate', settable=True, prop_names = ['r', 'g', 'b'])
+        self.add_property('ShaderNodeSeparateRGB', 'separate') 
 
         # ----------------------------------------------------------------------------------------------------
         # Methods

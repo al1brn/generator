@@ -1,4 +1,5 @@
 Release 1.01
+------------
 
 - Float * Vector:
   - pb : the first type defined the result, here a Float
@@ -21,3 +22,13 @@ Release 1.01
   One socket and one parameter prevents these to be properties
   
 - Bug extrude : return domain selction and selected faces
+
+- Bug logical operations
+
+Release 1.02
+------------
+
+
+
+
+
