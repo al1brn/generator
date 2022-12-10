@@ -17,7 +17,7 @@ The geonodes implements two layers:
     - Sockets layer
         One class per data type:
             Basis data: Boolean, Integer, Float, Vector, Color, String
-            Geometry  : Geometry, Curve, Mesh, Point, Instance, Volume
+            Geometry  : Geometry, Curve, Mesh, Point, Instance, Volume, Curves
             Special   : Collection, Object, Material, Texture, Image
         The methods and properties of the sockets are implemented by creating nodes:
             circle = Mesh.Circle(radius=2.) --> creates the node GeometryNodeMeshCircle
@@ -234,6 +234,9 @@ NODES_MENU = {
     
     "color_ramp"                 : ("color"                     , "color/color_ramp"                      ),
     "colorramp"                  : ("color"                     , "color/color_ramp"                      ),
+
+    "combine_color"              : ("color"                     , "color/combine_color"                   ), # 3.3
+    "separate_color"             : ("color"                     , "color/separate_color"                  ), # 3.3
     
     "combine_rgb"                : ("color"                     , "color/combine_rgb"                     ),
     
@@ -241,7 +244,7 @@ NODES_MENU = {
     "mix"                        : ("color"                     , "color/mix_rgb"                         ),
 
     "rgb_curves"                 : ("color"                     , "color/rgb_curves"                      ),
-    "separate_rgb"               : ("color"                     , "color/separate_rgb"                    ),
+    "separate_rgb"               : ("color"                     , "color/separate_rgb"                    ), # Deprecated
 
     "curve_length"               : ("curve"                     , "curve/curve_length"                    ),
     "curve_to_mesh"              : ("curve"                     , "curve/curve_to_mesh"                   ),
@@ -272,6 +275,11 @@ NODES_MENU = {
     "set_spline_cyclic"          : ("curve"                     , "curve/set_spline_cyclic"               ),
     "set_spline_resolution"      : ("curve"                     , "curve/set_spline_resolution"           ),
     "set_spline_type"            : ("curve"                     , "curve/set_spline_type"                 ),
+
+    "deform_curves_on_surface"   : ("curve"                     , "curve/deform_curves_on_surface"        ), # 3.3
+    
+    
+    
     "index"                      : ("curve_primitives"          , "curve_primitives/index"                ),
     "arc"                        : ("curve_primitives"          , "curve_primitives/arc"                  ),
     "bezier_segment"             : ("curve_primitives"          , "curve_primitives/bezier_segment"       ),
@@ -328,6 +336,9 @@ NODES_MENU = {
     "translate_instances"        : ("instances"                 , "instances/translate_instances"         ),
     "realize_instances"          : ("instances"                 , "instances/realize_instances"           ),
     
+    "instance_scale"             : ("instances"                 , "instances/instance_scale"              ), # 3.3
+    "instance_rotation"          : ("instances"                 , "instances/instance_rotation"           ), # 3.3
+    
     "replace_material"           : ("material"                  , "material/replace_material"             ),
     "material_index"             : ("material"                  , "material/material_index"               ),
     "material_selection"         : ("material"                  , "material/material_selection"           ),
@@ -355,6 +366,11 @@ NODES_MENU = {
     "mesh_island"                : ("mesh"                      , "mesh/mesh_island"                      ),
     "vertex_neighbors"           : ("mesh"                      , "mesh/vertex_neighbors"                 ),
     "set_shade_smooth"           : ("mesh"                      , "mesh/set_shade_smooth"                 ),
+    
+    "edge_paths_to_curves"       : ("mesh"                      , "mesh/edge_paths_to_curves"             ), # 3.3
+    "edge_paths_to_selection"    : ("mesh"                      , "mesh/edge_paths_to_selection"          ), # 3.3
+    "shortest_edge_paths"        : ("mesh"                      , "mesh/shortest_edge_paths"              ), # 3.3
+    "mesh_to_volume"             : ("mesh"                      , "mesh/mesh_to_volume"                   ), # 3.3
 
     "cone"                       : ("mesh_primitives"           , "mesh_primitives/cone"                  ),
     "cube"                       : ("mesh_primitives"           , "mesh_primitives/cube"                  ),
@@ -374,6 +390,8 @@ NODES_MENU = {
     "points_to_vertices"         : ("point"                     , "point/points_to_vertices"              ),
     "points_to_volume"           : ("point"                     , "point/points_to_volume"                ),
     "set_point_radius"           : ("point"                     , "point/set_point_radius"                ),
+
+    "points"                     : ("point"                     , "point/points"                          ), # 3.3
 
     "join_strings"               : ("text"                      , "text/join_strings"                     ),
     "replace_string"             : ("text"                      , "text/replace_string"                   ),
@@ -412,7 +430,7 @@ NODES_MENU = {
     
     "white_noise"                : ("texture"                   , "texture/white_noise"                   ),
     "white_noise_texture"        : ("texture"                   , "texture/white_noise"                   ),
-    
+
     "accumulate_field"           : ("utilities"                 , "utilities/accumulate_field"            ),
     "align_euler_to_vector"      : ("utilities"                 , "utilities/align_euler_to_vector"       ),
     "boolean_math"               : ("utilities"                 , "utilities/boolean_math"                ),
@@ -426,7 +444,11 @@ NODES_MENU = {
     "random_value"               : ("utilities"                 , "utilities/random_value"                ),
     "rotate_euler"               : ("utilities"                 , "utilities/rotate_euler"                ),
     "switch"                     : ("utilities"                 , "utilities/switch"                      ),
+    "interpolate_domain"         : ("utilities"                 , "utilities/interpolate_domain"          ), # 3.3
 
+    "pack_uv_islands"            : ("uv"                        , "uv/pack_uv_islands"                    ), # 3.3
+    "uv_unwrap"                  : ("uv"                        , "uv/uv_unwrap"                          ), # 3.3
+    
     "combine_xyz"                : ("vector"                    , "vector/combine_xyz"                    ),
     "separate_xyz"               : ("vector"                    , "vector/separate_xyz"                   ),
     "vector_curves"              : ("vector"                    , "vector/vector_curves"                  ),
@@ -434,6 +456,7 @@ NODES_MENU = {
     "vector_rotate"              : ("vector"                    , "vector/vector_rotate"                  ),
 
     "volume_to_mesh"             : ("volume"                    , "volume/volume_to_mesh"                 ),
+    "volume_cube"                : ("volume"                    , "volume/volume_cube"                    ), # 3.3
     
     "group"                      : ("group"                     , "group"                                 ),
 }
@@ -467,6 +490,13 @@ _indent_, _0_, _1_, _2_, _3_, _4_ = indent_set(0)
 
 
 # ====================================================================================================
+# Socket name replaced by label
+
+def socket_name(blender_socket):
+    return blender_socket.name #if blender_socket.label == "" else blender_socket.label
+
+
+# ====================================================================================================
 # Call argument
 #
 # Argument types:
@@ -497,15 +527,16 @@ _indent_, _0_, _1_, _2_, _3_, _4_ = indent_set(0)
 
 
 class Argument:
-    def __init__(self, arg_type, name, is_self=False):
+    def __init__(self, arg_type, name, is_self=False, label=None):
 
         self.arg_type = arg_type
         self.name     = name
+        self.label    = label
         self.is_self  = is_self
         
     @classmethod
-    def Socket(cls, name, wsocket, is_self=False):
-        arg         = cls('SOCKET', name, is_self=is_self)
+    def Socket(cls, name, wsocket, is_self=False, label=None):
+        arg         = cls('SOCKET', name, is_self=is_self, label=label)
         arg.wsocket = wsocket
         arg.is_self = is_self
         return arg
@@ -534,6 +565,10 @@ class Argument:
         for k, v in kwargs:
             setattr(arg, k, v)
         return arg
+    
+    @property
+    def name_or_label(self):
+        return self.name if self.label is None else self.label
         
     @property
     def is_socket(self):
@@ -597,14 +632,14 @@ class Argument:
         elif self.arg_type == 'SOCKET':
             if self.is_multi:
                 if self.is_self:
-                    return f"self, *{self.name}"
+                    return f"self, *{self.name_or_label}"
                 else:
-                    return f"*{self.name}"
+                    return f"*{self.name_or_label}"
             else:
                 if self.is_self:
                     return "self"
                 else:
-                    return f"{self.name}=None"
+                    return f"{self.name_or_label}=None"
         
         elif self.arg_type == 'PARAM':
             if self.is_fixed:
@@ -634,7 +669,7 @@ class Argument:
                 if self.is_self:
                     return f"{self.name}=self"
                 else:
-                    return f"{self.name}={self.name}"
+                    return f"{self.name}={self.name_or_label}"
         
         elif self.arg_type == 'PARAM':
             if self.is_fixed:
@@ -811,7 +846,7 @@ class Arguments(list):
             if not arg.is_socket:
                 continue
             
-            name = arg.wsocket.bsocket.name
+            name = socket_name(arg.wsocket.bsocket)
             if name in order:
                 reorder[order[name]] = arg
         
@@ -926,7 +961,7 @@ class WSocket:
         self.class_name = WSocket.SOCKET_CLASSES[self.bsocket.bl_idname][0]
         self.domain_data_type = WSocket.DOMAIN_DATA_TYPES.get(self.class_name)
         if self.class_name == 'Geometry':
-            if self.name.lower() in ['mesh', 'points', 'instances', 'volume', 'curve']:
+            if self.name.lower() in ['mesh', 'points', 'instances', 'volume', 'curve', 'curves']:
                 self.class_name = self.name.capitalize()
                 
     def __repr__(self):
@@ -946,7 +981,7 @@ class WSocket:
     
     @property
     def name(self):
-        s = self.bsocket.name.lower().replace(' ', '_')
+        s = socket_name(self.bsocket).lower().replace(' ', '_')
         if s == 'id':
             return 'ID'
         else:
@@ -1281,7 +1316,13 @@ class WNode:
     
     @property
     def blender_ref(self):
-        return f"https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/{NODES_MENU[self.blender_ref_name][1]}.html"
+        ref = NODES_MENU.get(self.blender_ref_name)
+        if ref is None:
+            print(f"CAUTION: key {self.blender_ref_name} not found")
+            ref = f"{self.blender_ref_name} not found"
+            
+        return f"https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/{ref[1]}.html"
+            
     
     
     # ---------------------------------------------------------------------------

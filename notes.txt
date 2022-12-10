@@ -1,5 +1,5 @@
 Release 1.01
-------------
+============
 
 - Float * Vector:
   - pb : the first type defined the result, here a Float
@@ -25,8 +25,97 @@ Release 1.01
 
 - Bug logical operations
 
-Release 1.02
-------------
+
+Release 1.1.0
+=============
+
+Update to take into accounts new Nodes from Blender 3.3 LTS.
+No sure how Curves must me implemented. I've created a new Geometry class. Could be changed.
+
+
+
+- Improve pluging values into sockets
+
+- Implement duplicate elements node
+  Duplication is a domain method
+  Operator __imul__ (*=) is a shortcut for duplicate_element:
+      - mesh.verts *= 10
+      - mesh.faces *= gn.Integer.Input(3, "Count", min_value=0)
+  duplicate at geometry level is replaced by instantiate method.
+  two operators can be used as shortcurts:
+      - instances = mesh * 10 # Create 10 instances of the mesh
+      - mesh *= 10            # Create 10 instances of the mesh an realize them
+
+- Implement field_at_index
+
+- Enable several viewers
+
+- New algorithm for nodes arrangement:
+     - Dimensions and location of nodes and frames are more accurate
+     - Input nodes are duplicated within frames by default. This limits
+       the number of links coming from the group input node
+     - Reroute nodes are added as inputs and outputs of the frames
+     
+- Domain(bool) syntax deprecated. Replaced by Domain[bool] syntax
+  
+
+Blender 3.3
+-----------
+
+> Modified nodes:
+     GeometryNodeMeshBoolean        : creation of output socket 'Intersecting Edges''
+                                      Mesh methods union, intersect and difference now return the node
+     GeometryNodeSubdivisionSurface : replacement of input socket 'Crease' by 'Edge Crease' and 'Vertex Crease'
+
+> New nodes:
+
+    
+     Color Combine and separate
+         FunctionNodeCombineColor
+         FunctionNodeSeparateColor
+             - suppress CombineRGB and properties r, g, b
+             - add Color constructors Combine(..., mode='RGB'), CombineRGB, CombineHSV, CombineHSL
+             - Color __init__ constructor uses 'RGB' mode from a triplet or quadruplet
+             - add properties red, green, blue, hue, saturation, value, lightness, alpha
+     
+     GeometryNodeDeformCurvesOnSurface
+         - Creation of new Geometry Curves with method deform_curves_on_surface
+         
+     GeometryNodeEdgePathsToCurves
+         - new Mesh method: Mesh.edge_paths_to_curves
+         - new Vertex method: Vertex.edge_paths_to_curves
+     
+     GeometryNodeEdgePathsToSelection
+         - new Vertex mdetho: Vertex.edge_paths_to_selection
+     
+     GeometryNodeFieldOnDomain
+         - new Domain method : Domain.interpolate(value, data_type=None)
+         
+     GeometryNodeInputInstanceRotation
+         - new Instance domain property: Instance.rotation
+         
+     GeometryNodeInputInstanceScale
+         - new Instance domain property: Instance.scale
+         - rename method Instance.scale to Instance.set_scale
+     
+     GeometryNodeInputShortestEdgePaths
+         - new Vertex method: Vertex.shortest_edge_paths(edge_cost=None)
+         
+     GeometryNodeMeshToVolume
+         - new Mesh method: Mesh.to_volume()
+         
+     GeometryNodePoints
+         - new Points constructor: Points.Points
+       
+     GeometryNodeUVPackIslands
+         - new Face method: Face.pack_uv_islands()
+         
+     GeometryNodeUVUnwrap
+         - new Face method: Face.uv_unwrap()
+     
+     GeometryNodeVolumeCube
+         - new Volume constructor: Volume.Cube
+
 
 
 

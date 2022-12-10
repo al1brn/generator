@@ -135,10 +135,10 @@ COLOR_MIX = {
     'DIFFERENCE'    : 'difference',
     'SUBTRACT'      : 'subtract',
     'DIVIDE'        : 'divide',
-    'HUE'           : 'hue',
-    'SATURATION'    : 'saturation',
+    'HUE'           : 'mix_hue',
+    'SATURATION'    : 'mix_saturation',
     'COLOR'         : 'mix_color',
-    'VALUE'         : 'value',
+    'VALUE'         : 'mix_value',
 }
 
 MULTI_CLASSES_NODES = { # Function name and is an attribute. If it is an attribute, use the geometry as geometry socket
@@ -166,7 +166,7 @@ DATA_TYPES = {
 
 class NodeCall:
     
-    def __init__(self, family, wnode, class_name, meth_name, self_name=None, out_name=None, ret_class=None, stack=False, **fixed):
+    def __init__(self, family, wnode, class_name, meth_name, self_name=None, out_name=None, ret_class=None, stack=False, arg_labels={}, **fixed):
         
         self.family     = family
 
@@ -174,6 +174,7 @@ class NodeCall:
         self.class_name = class_name
         self.meth_name  = meth_name
         self.stack      = stack
+        self.arg_labels = {**arg_labels} # Replace the socket name by a user label (ComposeColor for instance)
         
         self.self_name  = self_name
         self.out_name   = out_name
@@ -332,7 +333,7 @@ class NodeCall:
                 continue
                 
             is_self  = uname == self_name
-            args.add(Argument.Socket(uname, wsocket=wsock, is_self=is_self))
+            args.add(Argument.Socket(uname, wsocket=wsock, is_self=is_self, label=self.arg_labels.get(uname)))
             
         for name, param in self.wnode.parameters.items():
             is_fixed = name in fixed
@@ -1079,7 +1080,19 @@ class ColorGen(DataClass):
         # ----------------------------------------------------------------------------------------------------
         # Constructor
         
-        self.add_call('CONSTRUCTOR', 'ShaderNodeCombineRGB', 'Combine')
+        # Combine RGB deprecated in Blender 3.3
+        #self.add_call('CONSTRUCTOR', 'ShaderNodeCombineRGB', 'Combine')
+
+        self.add_call('CONSTRUCTOR', 'FunctionNodeCombineColor', 'Combine')
+        
+        self.add_call('CONSTRUCTOR', 'FunctionNodeCombineColor', 'CombineRGB', mode='RGB')
+        
+        labels = {'red': 'hue', 'green': 'saturation', 'blue': 'value'}
+        self.add_call('CONSTRUCTOR', 'FunctionNodeCombineColor', 'CombineHSV', arg_labels=labels, mode='HSV')
+        
+        labels['blue'] = 'lightness'
+        self.add_call('CONSTRUCTOR', 'FunctionNodeCombineColor', 'CombineHSL', arg_labels=labels, mode='HSL')
+        
         
         # ----------------------------------------------------------------------------------------------------
         # Operations
@@ -1091,8 +1104,11 @@ class ColorGen(DataClass):
         # ----------------------------------------------------------------------------------------------------
         # separate property used by properties r, g and b
         
-        #self.add_property('ShaderNodeSeparateRGB', 'separate', settable=True, prop_names = ['r', 'g', 'b'])
-        self.add_property('ShaderNodeSeparateRGB', 'separate') 
+        # ShaderNodeSeparateRGB deprecated in Blender 3.3
+        #self.add_property('ShaderNodeSeparateRGB', 'separate') 
+        
+        # Replaced by separate color
+        self.add_call('METHOD', 'FunctionNodeSeparateColor', 'separate_color') 
 
         # ----------------------------------------------------------------------------------------------------
         # Methods
@@ -1155,8 +1171,7 @@ class GeometryGen(DataClass):
         self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_color',   data_type = 'FLOAT_COLOR'  )
 
         self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_elements')
-        self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_points',    domain = 'POINT'   )
-        
+        #self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_points',    domain = 'POINT'   )
 
         self.add_call('STACK', 'GeometryNodeDeleteGeometry',       'delete_geometry'    )
         self.add_call('STACK', 'GeometryNodeMergeByDistance',      'merge_by_distance'  )
@@ -1216,8 +1231,8 @@ class MeshGen(DataClass):
         # ----------------------------------------------------------------------------------------------------
         # Boolean operation
 
-        self.add_call('METHOD', 'GeometryNodeMeshBoolean', 'intersect',  operation='INTERSECT'  )
-        self.add_call('METHOD', 'GeometryNodeMeshBoolean', 'union',      operation='UNION'      )
+        self.add_call('METHOD', 'GeometryNodeMeshBoolean', 'intersect',  operation='INTERSECT')
+        self.add_call('METHOD', 'GeometryNodeMeshBoolean', 'union',      operation='UNION'    )
         self.add_call('METHOD', 'GeometryNodeMeshBoolean', 'difference', self_name='mesh_1',    operation='DIFFERENCE')
 
         # ----------------------------------------------------------------------------------------------------
@@ -1235,8 +1250,10 @@ class MeshGen(DataClass):
         
         self.add_call('METHOD', 'GeometryNodeExtrudeMesh',              'extrude',                       )
         self.add_call('METHOD', 'GeometryNodeMeshToCurve',              'to_curve',                     ret_class='Curve')
+        self.add_call('METHOD', 'GeometryNodeMeshToVolume',             'to_volume',                    ret_class='Volume')
         self.add_call('METHOD', 'GeometryNodeMeshToPoints',             'to_points',                    ret_class='Points')
         self.add_call('METHOD', 'GeometryNodeDistributePointsOnFaces',  'distribute_points_on_faces',   ret_class='Points')
+        self.add_call('METHOD', 'GeometryNodeEdgePathsToCurves',        'edge_paths_to_curves',         ret_class='Curves')
         
     # ----------------------------------------------------------------------------------------------------
     # Specific code
@@ -1272,6 +1289,8 @@ class MeshGen(DataClass):
 class PointsGen(DataClass):
     def __init__(self, nodes):
         super().__init__(nodes, 'Points', 'gn.Geometry')
+        
+        self.add_call('CONSTRUCTOR', 'GeometryNodePoints'        ,'Points'     )
         
         # ----------------------------------------------------------------------------------------------------
         # Properties
@@ -1312,7 +1331,6 @@ class InstancesGen(DataClass):
         self.add_call('STATIC', 'GeometryNodeInstanceOnPoints',   'InstanceOnPoints')
         self.add_call('STATIC', 'GeometryNodeGeometryToInstance', 'FromGeometries')
         
-        
         # ----------------------------------------------------------------------------------------------------
         # Properties
         #                 - component : str (default = 'MESH') in ('MESH', 'POINTCLOUD', 'CURVE', 'INSTANCES')
@@ -1345,8 +1363,23 @@ class InstancesGen(DataClass):
 class VolumeGen(DataClass):
     def __init__(self, nodes):
         super().__init__(nodes, 'Volume', 'gn.Geometry')
+
+        self.add_call('CONSTRUCTOR', 'GeometryNodeVolumeCube', 'Cube')
         
         self.add_call('METHOD', 'GeometryNodeVolumeToMesh', 'to_mesh' )
+        
+# -----------------------------------------------------------------------------------------------------------------------------
+# Curves (From Blender 3.3)
+        
+class CurvesGen(DataClass):
+    def __init__(self, nodes):
+        super().__init__(nodes, 'Curves', 'gn.Geometry')
+
+        #self.add_call('CONSTRUCTOR', 'GeometryNodeVolumeCube', 'Cube')
+        
+        self.add_call('STACK', 'GeometryNodeDeformCurvesOnSurface', 'deform_on_surface' , ret_class='Curves')
+        
+        
         
 # -----------------------------------------------------------------------------------------------------------------------------
 # Curve 
@@ -1479,7 +1512,7 @@ class ObjectGen(DataClass):
         
 
 DATA_CLASSES = [GlobalGen, BooleanGen, IntegerGen, FloatGen, VectorGen, ColorGen, StringGen,
-                GeometryGen, CurveGen, MeshGen, PointsGen, InstancesGen, VolumeGen,
+                GeometryGen, CurveGen, MeshGen, PointsGen, InstancesGen, VolumeGen, CurvesGen,
                 CollectionGen, ObjectGen, TextureGen, MaterialGen, ImageGen]
 
 
