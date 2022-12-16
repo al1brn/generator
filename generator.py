@@ -223,32 +223,42 @@ from generator.pyparser import Parser
 import importlib
 importlib.reload(gsock)
 
+DEPRECATED = {
+    "GeometryNodeAttributeTransfer",
+    "ShaderNodeCombineRGB",
+    "ShaderNodeMixRGB",
+    "ShaderNodeSeparateRGB",
+    }
+
 NODES_MENU = {
+    
+    # DEPRECATED
+
+    #"transfer_attribute"         : ("attribute"                 , "attribute/transfer_attribute"          ),
+    #"combine_rgb"                : ("color"                     , "color/combine_rgb"                     ),
+    
+    # CURRENT 
+    
+    
     "index"                      : ("attribute"                 , "attribute/index"                       ),
     "attribute_statistic"        : ("attribute"                 , "attribute/attribute_statistic"         ),
     "capture_attribute"          : ("attribute"                 , "attribute/capture_attribute"           ),
     "domain_size"                : ("attribute"                 , "attribute/domain_size"                 ),
-    "transfer_attribute"         : ("attribute"                 , "attribute/transfer_attribute"          ),
     "store_named_attribute"      : ("attribute"                 , "attribute/store_named_attribute"       ),
     "remove_named_attribute"     : ("attribute"                 , "attribute/remove_named_attribute"      ),
     
     "color_ramp"                 : ("color"                     , "color/color_ramp"                      ),
     "colorramp"                  : ("color"                     , "color/color_ramp"                      ),
-
     "combine_color"              : ("color"                     , "color/combine_color"                   ), # 3.3
-    "separate_color"             : ("color"                     , "color/separate_color"                  ), # 3.3
-    
-    "combine_rgb"                : ("color"                     , "color/combine_rgb"                     ),
-    
-    "mix_rgb"                    : ("color"                     , "color/mix_rgb"                         ),
-    "mix"                        : ("color"                     , "color/mix_rgb"                         ),
-
+    "mix"                        : ("color"                     , "color/mix"                             ),
+    #"mix"                        : ("color"                     , "color/mix_rgb"                         ),
     "rgb_curves"                 : ("color"                     , "color/rgb_curves"                      ),
-    "separate_rgb"               : ("color"                     , "color/separate_rgb"                    ), # Deprecated
+    "separate_color"             : ("color"                     , "color/separate_color"                  ), # 3.3
 
     "curve_length"               : ("curve"                     , "curve/curve_length"                    ),
     "curve_to_mesh"              : ("curve"                     , "curve/curve_to_mesh"                   ),
     "curve_to_points"            : ("curve"                     , "curve/curve_to_points"                 ),
+    "deform_curves_on_surface"   : ("curve"                     , "curve/deform_curves_on_surface"        ), # 3.3
     "fill_curve"                 : ("curve"                     , "curve/fill_curve"                      ),
     "fillet_curve"               : ("curve"                     , "curve/fillet_curve"                    ),
     "resample_curve"             : ("curve"                     , "curve/resample_curve"                  ),
@@ -268,6 +278,7 @@ NODES_MENU = {
     "spline_length"              : ("curve"                     , "curve/spline_length"                   ),
     "spline_parameter"           : ("curve"                     , "curve/spline_parameter"                ),
     "spline_resolution"          : ("curve"                     , "curve/spline_resolution"               ),
+    "set_curve_normal"           : ("curve"                     , "curve/set_curve_normal"                ), # 3.4
     "set_curve_radius"           : ("curve"                     , "curve/set_curve_radius"                ),
     "set_curve_tilt"             : ("curve"                     , "curve/set_curve_tilt"                  ),
     "set_handle_positions"       : ("curve"                     , "curve/set_handle_positions"            ),
@@ -276,9 +287,6 @@ NODES_MENU = {
     "set_spline_resolution"      : ("curve"                     , "curve/set_spline_resolution"           ),
     "set_spline_type"            : ("curve"                     , "curve/set_spline_type"                 ),
 
-    "deform_curves_on_surface"   : ("curve"                     , "curve/deform_curves_on_surface"        ), # 3.3
-    
-    
     
     "index"                      : ("curve_primitives"          , "curve_primitives/index"                ),
     "arc"                        : ("curve_primitives"          , "curve_primitives/arc"                  ),
@@ -292,6 +300,10 @@ NODES_MENU = {
     "quadratic_bezier"           : ("curve_primitives"          , "curve_primitives/quadratic_bezier"     ),
     "quadrilateral"              : ("curve_primitives"          , "curve_primitives/quadrilateral"        ),
     "star"                       : ("curve_primitives"          , "curve_primitives/star"                 ),
+    
+    "offset_point_in_curve"      : ("curve_topology"            , "curve_topology/offset_point_in_curve"  ), # 3.4
+    "curve_of_point"             : ("curve_topology"            , "curve_topology/curve_of_point"         ), # 3.4
+    "points_of_curve"            : ("curve_topology"            , "curve_topology/points_of_curve"        ), # 3.4
 
     "bounding_box"               : ("geometry"                  , "geometry/bounding_box"                 ),
     "convex_hull"                : ("geometry"                  , "geometry/convex_hull"                  ),
@@ -302,6 +314,8 @@ NODES_MENU = {
     "join_geometry"              : ("geometry"                  , "geometry/join_geometry"                ),
     "merge_by_distance"          : ("geometry"                  , "geometry/merge_by_distance"            ),
     "raycast"                    : ("geometry"                  , "geometry/raycast"                      ),
+    "sample_index"               : ("geometry"                  , "geometry/sample_index"                 ),
+    "sample_nearest"             : ("geometry"                  , "geometry/sample_nearest"               ),
     "separate_components"        : ("geometry"                  , "geometry/separate_components"          ),
     "separate_geometry"          : ("geometry"                  , "geometry/separate_geometry"            ),
     "transform"                  : ("geometry"                  , "geometry/transform"                    ),
@@ -315,6 +329,7 @@ NODES_MENU = {
     "is_viewport"                : ("input"                     , "input/is_viewport"                     ),
     "material"                   : ("input"                     , "input/material"                        ),
     "object_info"                : ("input"                     , "input/object_info"                     ),
+    "self_object"                : ("input"                     , "input/self_object"                     ), # 3.4
     "scene_time"                 : ("input"                     , "input/scene_time"                      ),
     "string"                     : ("input"                     , "input/string"                          ),
     "value"                      : ("input"                     , "input/value"                           ),
@@ -322,7 +337,6 @@ NODES_MENU = {
 
     "input_index"                : ("input"                     , "input/input_index"                     ),
     "index"                      : ("input"                     , "input/input_index"                     ),
-
     "named_attribute"            : ("input"                     , "input/named_attribute"                 ),
     "normal"                     : ("input"                     , "input/normal"                          ),
     "position"                   : ("input"                     , "input/position"                        ),
@@ -346,11 +360,16 @@ NODES_MENU = {
     "set_material_index"         : ("material"                  , "material/set_material_index"           ),
 
     "dual_mesh"                  : ("mesh"                      , "mesh/dual_mesh"                        ),
+    "edge_paths_to_curves"       : ("mesh"                      , "mesh/edge_paths_to_curves"             ), # 3.3
+    "edge_paths_to_selection"    : ("mesh"                      , "mesh/edge_paths_to_selection"          ), # 3.3
     "extrude_mesh"               : ("mesh"                      , "mesh/extrude_mesh"                     ),
     "flip_faces"                 : ("mesh"                      , "mesh/flip_faces"                       ),
     "mesh_boolean"               : ("mesh"                      , "mesh/mesh_boolean"                     ),
     "mesh_to_curve"              : ("mesh"                      , "mesh/mesh_to_curve"                    ),
     "mesh_to_points"             : ("mesh"                      , "mesh/mesh_to_points"                   ),
+    "mesh_to_volume"             : ("mesh"                      , "mesh/mesh_to_volume"                   ), # 3.3
+    "sample_nearest_surface"     : ("mesh"                      , "mesh/sample_nearest_surface"           ), # 3.4
+    "sample_uv_surface"          : ("mesh"                      , "mesh/sample_uv_surface"                ), # 3.4
     "scale_elements"             : ("mesh"                      , "mesh/scale_elements"                   ),
     "split_edges"                : ("mesh"                      , "mesh/split_edges"                      ),
     "subdivide_mesh"             : ("mesh"                      , "mesh/subdivide_mesh"                   ),
@@ -362,15 +381,12 @@ NODES_MENU = {
     "face_area"                  : ("mesh"                      , "mesh/face_area"                        ),
     "face_is_planar"             : ("mesh"                      , "mesh/face_is_planar"                   ),
     "face_neighbors"             : ("mesh"                      , "mesh/face_neighbors"                   ),
+    "face_set_boundaries"        : ("mesh"                      , "mesh/face_set_boundaries"              ), # 3.4
     "is_shade_smooth"            : ("mesh"                      , "mesh/is_shade_smooth"                  ),
     "mesh_island"                : ("mesh"                      , "mesh/mesh_island"                      ),
+    "shortest_edge_paths"        : ("mesh"                      , "mesh/shortest_edge_paths"              ), # 3.3
     "vertex_neighbors"           : ("mesh"                      , "mesh/vertex_neighbors"                 ),
     "set_shade_smooth"           : ("mesh"                      , "mesh/set_shade_smooth"                 ),
-    
-    "edge_paths_to_curves"       : ("mesh"                      , "mesh/edge_paths_to_curves"             ), # 3.3
-    "edge_paths_to_selection"    : ("mesh"                      , "mesh/edge_paths_to_selection"          ), # 3.3
-    "shortest_edge_paths"        : ("mesh"                      , "mesh/shortest_edge_paths"              ), # 3.3
-    "mesh_to_volume"             : ("mesh"                      , "mesh/mesh_to_volume"                   ), # 3.3
 
     "cone"                       : ("mesh_primitives"           , "mesh_primitives/cone"                  ),
     "cube"                       : ("mesh_primitives"           , "mesh_primitives/cube"                  ),
@@ -383,9 +399,18 @@ NODES_MENU = {
     "mesh_circle"                : ("mesh_primitives"           , "mesh_primitives/mesh_circle"           ),
     "mesh_line"                  : ("mesh_primitives"           , "mesh_primitives/mesh_line"             ),
     "uv_sphere"                  : ("mesh_primitives"           , "mesh_primitives/uv_sphere"             ),
+    
+    "corners_of_face"            : ("mesh_topology"             , "mesh_topology/corners_of_face"         ), # 3.4
+    "corners_of_vertex"          : ("mesh_topology"             , "mesh_topology/corners_of_vertex"       ), # 3.4
+    "edges_of_corner"            : ("mesh_topology"             , "mesh_topology/edges_of_corner"         ), # 3.4
+    "edges_of_vertex"            : ("mesh_topology"             , "mesh_topology/edges_of_vertex"         ), # 3.4
+    "face_of_corner"             : ("mesh_topology"             , "mesh_topology/face_of_corner"          ), # 3.4
+    "offset_corner_in_face"      : ("mesh_topology"             , "mesh_topology/offset_corner_in_face"   ), # 3.4
+    "vertex_of_corner"           : ("mesh_topology"             , "mesh_topology/vertex_of_corner"        ), # 3.4
 
     "viewer"                     : ("output"                    , "output/viewer"                         ),
 
+    "distribute_points_in_volume" : ("point"                    , "point/distribute_points_in_volume"     ), # 3.4
     "distribute_points_on_faces" : ("point"                     , "point/distribute_points_on_faces"      ),
     "points_to_vertices"         : ("point"                     , "point/points_to_vertices"              ),
     "points_to_volume"           : ("point"                     , "point/points_to_volume"                ),
@@ -621,7 +646,6 @@ class Argument:
         
         else:
             raise RuntimeError(f"Unkwnon argument type: {self.arg_type}")
-        
     
     @property
     def sheader(self):
@@ -690,64 +714,43 @@ class Argument:
         if self.arg_type == 'CLS':
             return ""
         
-        if True:
-            if self.is_self:
+        if self.is_self:
+            return ""
+        
+        if self.arg_type == 'OTHER':
+            if self.header_str == "":
                 return ""
-            
-            if self.arg_type == 'OTHER':
-                if self.header_str == "":
-                    return ""
-                else:
-                    s = self.header_str
-                    if s == "node_color = None":
-                        return "node_color (color): Node background color"
-                    elif s == "node_label = None":
-                        return "node_label (str): Node label"
-                    else:
-                        return self.header_str.replace('=', ':')
-                
-            s = f"{self.name}"
-            if self.is_socket:
-                s += ": "
-                if self.is_multi:
-                    s += "<m>"
-                s += self.wsocket.class_name
-
             else:
-                if self.param is None:
-                    return ""
-                    #s += f"({type(self.value).__name__}): {self.value}"
-                else:
-                    if self.is_fixed:
-                        return ""
-                    
-                    s += f" ({type(self.value).__name__}): {self.value}"
-                    if self.param.is_enum:
-                        s += f" in {self.param.short_values}"
-                
-            
-        else:
-            if self.arg_type == 'OTHER':
-                if self.header_str == "":
-                    return ""
+                s = self.header_str
+                if s == "node_color = None":
+                    return "node_color (color): Node background color"
+                elif s == "node_label = None":
+                    return "node_label (str): Node label"
                 else:
                     return self.header_str.replace('=', ':')
             
-            s = f"{self.name} : "
-            if self.is_socket:
-                if self.is_multi:
-                    s += "*"
-                s += self.wsocket.class_name
-                if self.is_self:
-                    s += " (self)"
+        s = f"{self.name}"
+        if self.is_socket:
+            s += ": "
+            if self.is_multi:
+                s += "<m>"
+            if isinstance(self.wsocket, list):
+                s += str([ws.class_name for ws in self.wsocket])
             else:
-                if self.param is None:
-                    s += f"{self.value} ({type(self.value).__name__})"
-                else:
-                    s += str(self.value)
-                    if self.param.is_enum and not self.is_fixed:
-                        s += f" in {self.param.short_values}"
-                    
+                s += self.wsocket.class_name
+
+        else:
+            if self.param is None:
+                return ""
+                #s += f"({type(self.value).__name__}): {self.value}"
+            else:
+                if self.is_fixed:
+                    return ""
+                
+                s += f" ({type(self.value).__name__}): {self.value}"
+                if self.param.is_enum:
+                    s += f" in {self.param.short_values}"
+
         return s
     
     @property
@@ -765,6 +768,7 @@ class Argument:
             if self.is_multi:
                 s += "*"
             return s + f"{self.wsocket.uname})"
+        
         
 # ---------------------------------------------------------------------------
 # A list of Arguments
@@ -903,6 +907,70 @@ class Arguments(list):
                 
         return text
     
+    # ====================================================================================================
+    # Implementation in classes or function
+    # 
+    # keys of kwargs represent argument with a initial value différent from default
+    # In the case the argument is not put in the list
+    
+    def method_header(self, **kwargs):
+        
+        vals = []
+        
+        # ----- Multi socket first
+
+        for arg in self:
+            if arg.name_or_label in kwargs.keys():
+                continue
+            
+            if arg.arg_type == 'SOCKET' and arg.is_multi:
+                vals.append(f"*{arg.name_or_label}")
+                
+        # ----- Other sockets then
+        
+        for arg in self:
+            if arg.name_or_label in kwargs.keys():
+                continue
+
+            if arg.arg_type == 'SOCKET' and arg.is_multi:
+                continue
+            
+            if arg.arg_type == 'SOCKET':
+                vals.append(f"{arg.name_or_label}=None")
+            else:
+                vals.append(f"{arg.name}={arg.value}")
+                
+        return vals
+        
+    def method_call_arguments(self, **kwargs):
+        
+        vals = []
+        
+        # ----- Multi socket first
+
+        for arg in self:
+            if arg.arg_type == 'SOCKET' and arg.is_multi:
+                if arg.name_or_label in kwargs.keys():
+                    vals.append(f"{arg.name_or_label}={forced[arg.name_or_label]}")
+                else:
+                    vals.append(f"*{arg.name_or_label}")
+
+        # ----- Other sockets to complete
+        
+        for arg in self:
+            if arg.arg_type == 'SOCKET' and arg.is_multi:
+                continue
+            
+            if arg.name_or_label in kwargs.keys():
+                vals.append(f"{arg.name_or_label}={kwargs[arg.name_or_label]}")
+            else:
+                vals.append(f"{arg.name_or_label}={arg.name_or_label}")
+                
+        return ", ".join(vals)
+                
+        
+    
+    
 
 
 # ====================================================================================================
@@ -961,8 +1029,11 @@ class WSocket:
         self.class_name = WSocket.SOCKET_CLASSES[self.bsocket.bl_idname][0]
         self.domain_data_type = WSocket.DOMAIN_DATA_TYPES.get(self.class_name)
         if self.class_name == 'Geometry':
-            if self.name.lower() in ['mesh', 'points', 'instances', 'volume', 'curve', 'curves']:
+            if self.name.lower() in ['mesh', 'points', 'instances', 'volume', 'curve']:
                 self.class_name = self.name.capitalize()
+            elif self.name.lower() == 'curves':
+                self.class_name = 'Curve'
+                
                 
     def __repr__(self):
         return f"<{self.uname} ({self.class_name})>"
@@ -1579,7 +1650,7 @@ class WNode:
             new_section.set_text(f"> Data socket classes implementing this node.\n\n{slst}\n")
         
         return section
-    
+
     # ====================================================================================================
     # Generate the node class
     
@@ -1701,8 +1772,23 @@ class WNode:
                 else:
                     yield _2_ + "# Node parameters\n"
                 yield_comment = False
-            
-            yield _2_ + f"self.bnode.{param.name:15s} = {name}"
+                
+            # self.param = arg
+                
+            if self.has_shared_sockets and param.name == self.driving_param:
+                
+                socket_name = None
+                for uname, wsocks in self.inputs.unames.items():
+                    if isinstance(wsocks, list):
+                        socket_name = uname
+                if socket_name is None:
+                    yield _2_ + f"self.bnode.{param.name:15s} = {name}"
+                    #raise RuntimeError(f"None, {self}: No uname found for the the driving param '{param.name}'")
+                else:
+                    yield _2_ + f"self.bnode.{param.name:15s} = self.value_data_type({socket_name}) if {name} is None else {name}"
+                
+            else:
+                yield _2_ + f"self.bnode.{param.name:15s} = {name}"
         
         if not yield_comment:
             yield "\n"
@@ -1803,12 +1889,18 @@ class BNodes(dict):
         btree_nodes.clear()
 
         for tp in dir(bpy.types):
+            
+            if tp in DEPRECATED:
+                continue
+            
             if tp.find('Legacy') < 0:
                 try:
                     bnode = btree_nodes.new(tp)
                 except:
                     continue
                 self[tp] = bnode
+            
+                
 
 # ====================================================================================================
 # Generate the files
@@ -1942,9 +2034,6 @@ from geonodes.core.node import Node
         f.write(f"    nodes = {O}{sdict}{C}\n")
         f.write( "    return nodes[bl_idname](*args, **kwargs)\n\n")
         
-        
-        
-        
                     
 # ====================================================================================================
 # Generate the nodes module
@@ -1954,6 +2043,8 @@ def create_geonodes(fpath):
     print("-"*80)
     print("Generating nodes and sockets python from Blender geometry nodes")
     print(f"Blender version: {bpy.app.version_string}")
+    print("From Blender V3.4: data classes are not generated anymore")
+    print("They must be updated manually.")
     print("")
                 
     # ----- Create all the blender nodes
@@ -1998,9 +2089,9 @@ def create_geonodes(fpath):
     # ---------------------------------------------------------------------------
     # data sockets classes
     
-    print("Creating data sockets...")
-    
-    create_data_sockets(fpath)
+    if False:
+        print("Creating data sockets...")
+        create_data_sockets(fpath)
 
     # ---------------------------------------------------------------------------
     # nodes.py
@@ -2179,6 +2270,10 @@ def finger_print(fpath=None):
     nodes = {'VERSION': version}
 
     for tp in dir(bpy.types):
+        
+        if tp in DEPRECATED:
+            continue
+        
         if tp.find('Legacy') < 0:
             try:
                 bnode = btree_nodes.new(tp)

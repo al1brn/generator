@@ -1,0 +1,55 @@
+================================================================================
+Taking finger print of geometry nodes, Blender version: 3.4.0
+
+
+--------------------------------------------------------------------------------
+Changes compared to last version 3.3.0
+
+   Changes inputs  GeometryNodeSampleCurve
+     Suppressed:  [('Curve', 'NodeSocketGeometry')]
+     Created   :  [('Curves', 'NodeSocketGeometry'), ('Value', 'NodeSocketFloat'), ('Value', 'NodeSocketInt'), ('Value', 'NodeSocketVector'), ('Value', 'NodeSocketColor'), ('Value', 'NodeSocketBool'), ('Curve Index', 'NodeSocketInt')]
+
+   Changes outputs GeometryNodeSampleCurve
+     Suppressed:  []
+     Created   :  [('Value', 'NodeSocketFloat'), ('Value', 'NodeSocketInt'), ('Value', 'NodeSocketVector'), ('Value', 'NodeSocketColor'), ('Value', 'NodeSocketBool')]
+
+   Changes params  GeometryNodeSampleCurve
+     Suppressed:  []
+     Created   :  ['data_type', 'use_all_curves']
+
+   Changes params  GeometryNodeViewer
+     Suppressed:  []
+     Created   :  ['domain']
+
+
+--------------------------------------------------------------------------------
+Synthesis
+
+> Modified nodes:
+     GeometryNodeSampleCurve
+     GeometryNodeSampleCurve
+     GeometryNodeSampleCurve
+     GeometryNodeViewer
+
+> New nodes:
+     GeometryNodeCornersOfFace
+     GeometryNodeCornersOfVertex
+     GeometryNodeCurveOfPoint
+     GeometryNodeDistributePointsInVolume
+     GeometryNodeEdgesOfCorner
+     GeometryNodeEdgesOfVertex
+     GeometryNodeFaceOfCorner
+     GeometryNodeMeshFaceSetBoundaries
+     GeometryNodeOffsetCornerInFace
+     GeometryNodeOffsetPointInCurve
+     GeometryNodePointsOfCurve
+     GeometryNodeSampleIndex
+     GeometryNodeSampleNearest
+     GeometryNodeSampleNearestSurface
+     GeometryNodeSampleUVSurface
+     GeometryNodeSelfObject
+     GeometryNodeSetCurveNormal
+     GeometryNodeVertexOfCorner
+     ShaderNodeMix
+
+Done

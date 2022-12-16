@@ -1,0 +1,53 @@
+================================================================================
+Taking finger print of geometry nodes, Blender version: 3.4.0
+
+
+--------------------------------------------------------------------------------
+Changes compared to last version 3.3.0
+
+   Changes inputs  GeometryNodeSampleCurve
+     Suppressed:  [('Curve', 'NodeSocketGeometry')]
+     Created   :  [('Curves', 'NodeSocketGeometry'), ('Value', 'NodeSocketFloat'), ('Value', 'NodeSocketInt'), ('Value', 'NodeSocketVector'), ('Value', 'NodeSocketColor'), ('Value', 'NodeSocketBool'), ('Curve Index', 'NodeSocketInt')]
+
+   Changes outputs GeometryNodeSampleCurve
+     Suppressed:  []
+     Created   :  [('Value', 'NodeSocketFloat'), ('Value', 'NodeSocketInt'), ('Value', 'NodeSocketVector'), ('Value', 'NodeSocketColor'), ('Value', 'NodeSocketBool')]
+
+   Changes params  GeometryNodeSampleCurve
+     Suppressed:  []
+     Created   :  ['data_type', 'use_all_curves']
+
+   Changes params  GeometryNodeViewer
+     Suppressed:  []
+     Created   :  ['domain']
+
+
+--------------------------------------------------------------------------------
+Synthesis
+
+> Modified nodes:
+     GeometryNodeSampleCurve
+     GeometryNodeSampleCurve
+     GeometryNodeSampleCurve
+     GeometryNodeViewer
+
+> New nodes:
+     GeometryNodeMeshFaceSetBoundaries
+     GeometryNodeSampleIndex
+     GeometryNodeSampleNearest
+     GeometryNodeSampleNearestSurface
+     GeometryNodeSampleUVSurface
+     GeometryNodeSelfObject
+     GeometryNodeSetCurveNormal
+     ShaderNodeMix
+
+Done
+
+
+CAUTION: key face_set_boundaries not found
+CAUTION: key sample_index not found
+CAUTION: key sample_nearest not found
+CAUTION: key sample_nearest_surface not found
+CAUTION: key sample_uv_surface not found
+CAUTION: key self_object not found
+CAUTION: key set_curve_normal not found

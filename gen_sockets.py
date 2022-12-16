@@ -121,7 +121,7 @@ VECTOR_MATH = {
 }
 
 COLOR_MIX = {
-    'MIX'           : 'mix',
+    #'MIX'           : 'mix',
     'DARKEN'        : 'darken',
     'MULTIPLY'      : 'multiply',
     'BURN'          : 'burn',
@@ -145,7 +145,6 @@ MULTI_CLASSES_NODES = { # Function name and is an attribute. If it is an attribu
     'FunctionNodeRandomValue'        : ('Random',              False ), # ('FLOAT', 'INT', 'FLOAT_VECTOR', 'BOOLEAN')
     'GeometryNodeAccumulateField'    : ('accumulate_field',    False ), # ('FLOAT', 'INT', 'FLOAT_VECTOR')
     'GeometryNodeAttributeStatistic' : ('attribute_statistic', True  ), # ('FLOAT', 'FLOAT_VECTOR')
-    #'GeometryNodeAttributeTransfer'  : ('transfer_attribute',  True  ), # ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BOOLEAN')
     'GeometryNodeCaptureAttribute'   : ('capture_attribute',   True  ), # ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BOOLEAN')
     'GeometryNodeFieldAtIndex'       : ('field_at_index',      False ), # ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BOOLEAN')
     'GeometryNodeRaycast'            : ('raycast',             True  ), # ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BOOLEAN')
@@ -297,7 +296,6 @@ class NodeCall:
             geo_socket = None
             for wsock in self.wnode.inputs:
                 if wsock.enabled:
-
                     if wsock.class_name == class_name:
                         self_name = wsock.uname
                         break
@@ -310,7 +308,7 @@ class NodeCall:
                 if class_name in ['Mesh', 'Points', 'Instances', 'Volume', 'Curve'] and geo_socket is not None:
                     self_name = geo_socket
                 else:
-                    raise RuntimeError(f"The method {meth_name} on node {self.wnode.node_name} is {family}: it requires a self argument for class {class_name}.")
+                    raise RuntimeError(f"The method '{meth_name}' on node '{self.wnode.node_name}' is {family}: it requires a self argument for class {class_name}.")
                 
         # ---------------------------------------------------------------------------
         # Arguments
@@ -740,7 +738,7 @@ class DataClass:
             family = 'METHOD'
         else:
             stack = False
-        
+            
         self.methods_.append(NodeCall(family, self.wnodes[bl_idname], class_name=self.class_name, meth_name=meth_name, stack=stack, **kwargs))
         
     # ----------------------------------------------------------------------------------------------------
@@ -947,10 +945,24 @@ class GlobalGen(DataClass):
             f_name = f"vector_{meth_name}" if op in MATH else meth_name
             self.add_call('FUNCTION', blid, f_name, operation=op)
             
-        blid = 'ShaderNodeMixRGB'
-        for op, meth_name in COLOR_MIX.items():
-            self.add_call('FUNCTION', blid, f"color_{meth_name}", blend_type=op)
-            
+        #blid = 'ShaderNodeMixRGB'
+        #for op, meth_name in COLOR_MIX.items():
+        #    self.add_call('FUNCTION', blid, f"color_{meth_name}", blend_type=op)
+        
+        # Mesh topology (Blender 3.4)
+        
+        self.add_call('FUNCTION', 'GeometryNodeCornersOfFace',      'corners_of_face')
+        self.add_call('FUNCTION', 'GeometryNodeCornersOfVertex',    'corners_of_vertex')
+        self.add_call('FUNCTION', 'GeometryNodeEdgesOfCorner',      'edges_of_corner')
+        self.add_call('FUNCTION', 'GeometryNodeEdgesOfVertex',      'edges_of_vertex')
+        self.add_call('FUNCTION', 'GeometryNodeFaceOfCorner',       'face_of_corner')
+        self.add_call('FUNCTION', 'GeometryNodeOffsetCornerInFace', 'offset_corner_in_face')
+        self.add_call('FUNCTION', 'GeometryNodeVertexOfCorner',     'vertex_of_corner')
+        
+        # Blender 3.4
+        
+        self.add_call('FUNCTION', 'GeometryNodeCurveOfPoint',       'curve_of_point')
+        
 
 
 # -----------------------------------------------------------------------------------------------------------------------------
@@ -1097,9 +1109,9 @@ class ColorGen(DataClass):
         # ----------------------------------------------------------------------------------------------------
         # Operations
         
-        blid = 'ShaderNodeMixRGB'
-        for op, meth_name in COLOR_MIX.items():
-            self.add_call('METHOD', blid, meth_name, self_name="color1", blend_type=op)
+        #blid = 'ShaderNodeMixRGB'
+        #for op, meth_name in COLOR_MIX.items():
+        #    self.add_call('METHOD', blid, meth_name, self_name="color1", blend_type=op)
         
         # ----------------------------------------------------------------------------------------------------
         # separate property used by properties r, g and b
@@ -1114,7 +1126,7 @@ class ColorGen(DataClass):
         # Methods
 
         self.add_call('STACK', 'ShaderNodeRGBCurve',         'curves')
-        self.add_call('METHOD', 'ShaderNodeMixRGB',          'mix')
+        #self.add_call('METHOD', 'ShaderNodeMixRGB',          'mix')
         
 
 # -----------------------------------------------------------------------------------------------------------------------------
@@ -1164,11 +1176,11 @@ class GeometryGen(DataClass):
         
         self.add_call('STACK',  'GeometryNodeCaptureAttribute',     'capture_attribute')
         
-        self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_boolean', data_type = 'BOOLEAN'      )
-        self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_integer', data_type = 'INT'          )
-        self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_float',   data_type = 'FLOAT'        )
-        self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_vector',  data_type = 'FLOAT_VECTOR' )
-        self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_color',   data_type = 'FLOAT_COLOR'  )
+        #self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_boolean', data_type = 'BOOLEAN'      )
+        #self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_integer', data_type = 'INT'          )
+        #self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_float',   data_type = 'FLOAT'        )
+        #self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_vector',  data_type = 'FLOAT_VECTOR' )
+        #self.add_call('METHOD', 'GeometryNodeAttributeTransfer',    'transfer_color',   data_type = 'FLOAT_COLOR'  )
 
         self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_elements')
         #self.add_call('METHOD', 'GeometryNodeDuplicateElements',    'duplicate_points',    domain = 'POINT'   )
@@ -1253,7 +1265,9 @@ class MeshGen(DataClass):
         self.add_call('METHOD', 'GeometryNodeMeshToVolume',             'to_volume',                    ret_class='Volume')
         self.add_call('METHOD', 'GeometryNodeMeshToPoints',             'to_points',                    ret_class='Points')
         self.add_call('METHOD', 'GeometryNodeDistributePointsOnFaces',  'distribute_points_on_faces',   ret_class='Points')
-        self.add_call('METHOD', 'GeometryNodeEdgePathsToCurves',        'edge_paths_to_curves',         ret_class='Curves')
+        #self.add_call('METHOD', 'GeometryNodeEdgePathsToCurves',        'edge_paths_to_curves',         ret_class='Curves')
+        # Curves --> Curve class
+        self.add_call('METHOD', 'GeometryNodeEdgePathsToCurves',        'edge_paths_to_curves',         ret_class='Curve')
         
     # ----------------------------------------------------------------------------------------------------
     # Specific code
@@ -1370,13 +1384,13 @@ class VolumeGen(DataClass):
         
 # -----------------------------------------------------------------------------------------------------------------------------
 # Curves (From Blender 3.3)
+#
+# NO Curves class: Curve instead
         
 class CurvesGen(DataClass):
     def __init__(self, nodes):
         super().__init__(nodes, 'Curves', 'gn.Geometry')
 
-        #self.add_call('CONSTRUCTOR', 'GeometryNodeVolumeCube', 'Cube')
-        
         self.add_call('STACK', 'GeometryNodeDeformCurvesOnSurface', 'deform_on_surface' , ret_class='Curves')
         
         
@@ -1423,12 +1437,19 @@ class CurveGen(DataClass):
         self.add_call('STACK', 'GeometryNodeSubdivideCurve',           'subdivide'                )
         self.add_call('STACK', 'GeometryNodeTrimCurve',                'trim'                     )
         
+        self.add_call('STACK', 'GeometryNodeDeformCurvesOnSurface', 'deform_on_surface' , ret_class='Curve')
+        
+        
         self.add_call('METHOD', 'GeometryNodeDuplicateElements',       'duplicate_splines',   domain = 'SPLINE'  )
         self.add_call('METHOD', 'GeometryNodeFillCurve',               'fill',        ret_class='Mesh'   )
         self.add_call('METHOD', 'GeometryNodeCurveToMesh',             'to_mesh',     ret_class='Mesh'   )
         self.add_call('METHOD', 'GeometryNodeCurveToPoints',           'to_points',   ret_class='Points' )
-        self.add_call('METHOD', 'GeometryNodeSampleCurve',             'sample',      ret_class='NODE'   )
+        self.add_call('METHOD', 'GeometryNodeSampleCurve',             'sample',      data_type=None, ret_class='NODE'   )
         self.add_call('METHOD', 'GeometryNodeCurveLength',             'length',      ret_class='Float'  )
+        
+        
+        
+        self.add_call('METHOD', 'GeometryNodeCurveOfPoint', 'curve_of_point', ret_class='NODE')
         
     # ----------------------------------------------------------------------------------------------------
     # Specific code
@@ -1512,7 +1533,8 @@ class ObjectGen(DataClass):
         
 
 DATA_CLASSES = [GlobalGen, BooleanGen, IntegerGen, FloatGen, VectorGen, ColorGen, StringGen,
-                GeometryGen, CurveGen, MeshGen, PointsGen, InstancesGen, VolumeGen, CurvesGen,
+                GeometryGen, CurveGen, MeshGen, PointsGen, InstancesGen, VolumeGen,
+                #CurvesGen,
                 CollectionGen, ObjectGen, TextureGen, MaterialGen, ImageGen]
 
 
