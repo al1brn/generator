@@ -910,61 +910,104 @@ class Arguments(list):
     # ====================================================================================================
     # Implementation in classes or function
     # 
-    # keys of kwargs represent argument with a initial value différent from default
+    # keys of kwargs represent argument with a initial value different from default
     # In the case the argument is not put in the list
+    
+    # ----------------------------------------------------------------------------------------------------
+    # Method header
     
     def method_header(self, **kwargs):
         
         vals = []
         
-        # ----- Multi socket first
-
-        for arg in self:
-            if arg.name_or_label in kwargs.keys():
-                continue
-            
-            if arg.arg_type == 'SOCKET' and arg.is_multi:
-                vals.append(f"*{arg.name_or_label}")
-                
-        # ----- Other sockets then
+        # ----- Extract the arg_rename dict
         
-        for arg in self:
-            if arg.name_or_label in kwargs.keys():
-                continue
-
-            if arg.arg_type == 'SOCKET' and arg.is_multi:
-                continue
+        fixed_args = {**kwargs}
+        if 'arg_rename' in fixed_args:
+            arg_rename = fixed_args['arg_rename']
+            del fixed_args['arg_rename']
+        else:
+            arg_rename = {}
             
-            if arg.arg_type == 'SOCKET':
-                vals.append(f"{arg.name_or_label}=None")
-            else:
-                vals.append(f"{arg.name}={arg.value}")
+        # ---------------------------------------------------------------------------
+        # We make two passes:
+        # - first for multi argument
+        # - second for non multi argument
+        
+        for multi_pass in [True, False]:
+            for arg in self:
+                
+                # ----- Argument name
+                
+                arg_name = arg.name_or_label
+                if arg_name in arg_rename:
+                    arg_name = arg_rename[arg_name]
+                    
+                # ----- The argument is fixed: we don't it as  method argument
+                
+                if arg_name in fixed_args.keys():
+                    continue
+                
+                # ----- We write it
+
+                if arg.arg_type == 'SOCKET' and arg.is_multi:
+                    if multi_pass:
+                        vals.append(f"*{arg_name}")
+                        
+                else:
+                    if not multi_pass:
+                        if arg.arg_type == 'SOCKET':
+                            vals.append(f"{arg_name}=None")
+                        else:
+                            vals.append(f"{arg_name}={arg.value}")
                 
         return vals
+    
+    # ----------------------------------------------------------------------------------------------------
+    # Node calls
         
     def method_call_arguments(self, **kwargs):
         
         vals = []
         
-        # ----- Multi socket first
-
-        for arg in self:
-            if arg.arg_type == 'SOCKET' and arg.is_multi:
-                if arg.name_or_label in kwargs.keys():
-                    vals.append(f"{arg.name_or_label}={forced[arg.name_or_label]}")
-                else:
-                    vals.append(f"*{arg.name_or_label}")
-
-        # ----- Other sockets to complete
+        # ----- Extract the arg_rename dict
         
-        for arg in self:
-            if arg.arg_type == 'SOCKET' and arg.is_multi:
-                continue
+        fixed_args = {**kwargs}
+        if 'arg_rename' in fixed_args:
+            arg_rename = fixed_args['arg_rename']
+            del fixed_args['arg_rename']
+        else:
+            arg_rename = {}
             
-            if arg.name_or_label in kwargs.keys():
-                vals.append(f"{arg.name_or_label}={kwargs[arg.name_or_label]}")
-            else:
-                vals.append(f"{arg.name_or_label}={arg.name_or_label}")
+        # ---------------------------------------------------------------------------
+        # We make two passes:
+        # - first for multi argument
+        # - second for non multi argument
+        
+        for multi_pass in [True, False]:
+            for arg in self:
+                
+                # ----- Argument name
+                
+                arg_name = arg.name_or_label
+                if arg_name in arg_rename:
+                    arg_name = arg_rename[arg_name]
+
+                # ----- We write it
+
+                if arg.arg_type == 'SOCKET' and arg.is_multi:
+                    if multi_pass:
+                        if arg.name_or_label in fixed_args.keys():
+                            vals.append(f"{arg.name_or_label}={forced[arg_name]}")
+                        else:
+                            vals.append(f"*{arg_name}")
+                            
+                else:
+                    if not multi_pass:
+                        if arg_name in fixed_args.keys():
+                            vals.append(f"{arg.name_or_label}={fixed_args[arg_name]}")
+                        else:
+                            vals.append(f"{arg.name_or_label}={arg_name}")
                 
         return ", ".join(vals)
                 

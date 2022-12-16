@@ -297,7 +297,11 @@ class Generator:
             snode = s
 
         # ----- Return node, a socket or a tuple of sockets
-            
+        
+        def check_output_socket(name):
+            if name not in node.outputs.unames.keys():
+                raise Exception(f"Node {node.bl_idname}: '{name}' is not a valid output socket name in {list(node.outputs.unames.keys())}")
+        
         if self.ret_socket is None:
             s = snode
             
@@ -306,6 +310,7 @@ class Generator:
             vals = []
             ret_class = (None,) * len(self.ret_socket) if self.ret_class is None else self.ret_class
             for rs, rc in zip(self.ret_socket, ret_class):
+                check_output_socket(rs)
                 if rc is None:
                     vals.append(f"node.{rs}")
                 else:
@@ -314,6 +319,7 @@ class Generator:
             s = ", ".join(vals)
                 
         else:
+            check_output_socket(self.ret_socket)
             s = f"{snode}.{self.ret_socket}"
 
             if self.ret_class is not None:
@@ -331,7 +337,11 @@ class Generator:
         yield self.indent(1) + f"{return_}{s}\n\n"
         
 # ----------------------------------------------------------------------------------------------------
-# Class Method 
+# Method 
+
+class Static(Generator):
+    def __init__(self, **kwargs):
+        super().__init__(decorator='@staticmethod', **kwargs)
             
 class Method(Generator):
     def __init__(self, **kwargs):
@@ -567,7 +577,7 @@ ATTRIBUTE = {
             Property(cache=True, geometry='self', component="'MESH'", fname='point_count',  ret_socket='point_count'),
             Property(cache=True, geometry='self', component="'MESH'", fname='face_count',   ret_socket='face_count'),
             Property(cache=True, geometry='self', component="'MESH'", fname='edge_count',   ret_socket='edge_count'),
-            Property(cache=True, geometry='self', component="'MESH'", fname='corner_count', ret_socket='corner_count'),
+            Property(cache=True, geometry='self', component="'MESH'", fname='corner_count', ret_socket='face_corner_count'),
             ],
         'Curve'    : [
             Property(cache=True, geometry='self', component="'CURVE'"),
@@ -580,7 +590,7 @@ ATTRIBUTE = {
         'Vertex'   : Source(header="def __len__(self):", body="return self.data_socket.point_count"),
         'Face'     : Source(header="def __len__(self):", body="return self.data_socket.face_count"),
         'Edge'     : Source(header="def __len__(self):", body="return self.data_socket.edge_count"),
-        'Corner'   : Source(header="def __len__(self):", body="return self.data_socket.corner_count"),
+        'Corner'   : Source(header="def __len__(self):", body="return self.data_socket.face_corner_count"),
         
         'Spline'   : Source(header="def __len__(self):", body="return self.data_socket.spline_count"),
         'ControlPoint' : Source(header="def __len__(self):", body="return self.data_socket.point_count"),
@@ -1026,8 +1036,8 @@ INPUT = {
         'Vector': Constructor(fname='Vector', ret_socket='vector'),
     },
     'GeometryNodeInputID': {
-        'Geometry': PropAttribute(fname='ID', ret_socket='id'),
-        'Domain'  : DomPropAttribute(fname='ID', ret_socket='id'),
+        'Geometry': PropAttribute(fname='ID', ret_socket='ID'),
+        'Domain'  : DomPropAttribute(fname='ID', ret_socket='ID'),
     },
     'GeometryNodeInputIndex': {
         'Geometry': PropAttribute(fname='index', ret_socket='index'),
@@ -1061,9 +1071,10 @@ INPUT = {
         'Domain'  : DomPropAttribute(fname='position', ret_socket='position'),
     },
     'GeometryNodeInputRadius': {
-        'Geometry': PropAttribute(fname='radius', ret_socket='radius'),
-        'Domain'  : DomPropAttribute(fname='radius', ret_socket='radius'),
-        'Spline'  : DomPropAttribute(fname='radius', ret_socket='radius'),
+        'Geometry'   : PropAttribute(fname='radius', ret_socket='radius'),
+        'Domain'     : DomPropAttribute(fname='radius', ret_socket='radius'),
+        'Spline'     : DomPropAttribute(fname='radius', ret_socket='radius'),
+        'CloudPoint' : DomPropAttribute(fname='radius', ret_socket='radius'),
     },
     'GeometryNodeInputSceneTime': {
         'Float': [
@@ -1072,6 +1083,281 @@ INPUT = {
             ]
     },
 
+}
+
+INSTANCES = {
+    'GeometryNodeInstanceOnPoints': {
+        'Instances'     : [
+            Constructor(fname='InstanceOnPoints', ret_socket='instances'),
+            Method(fname='on_points', ret_socket='instances', ret_classes='Instances', instance='self.data_socket'),
+            ],
+        'Vertex'        : DomMethod(ret_socket='instances', ret_class='Instances', points='self'),
+        'ControlPoint'  : DomMethod(ret_socket='instances', ret_class='Instances', points='self'),
+        'CloudPoint'    : DomMethod(ret_socket='instances', ret_class='Instances', points='self'),
+    },
+    'GeometryNodeInstancesToPoints': {
+        'Instances': Method(fname='to_points', ret_socket='points', ret_class='Points', instances='self'),
+        'Instance':  DomMethod(fname='to_points', ret_socket='points', ret_class='Points', instances='self'),
+        
+    },
+    'GeometryNodeRealizeInstances': {
+        'Instances': Method(fname='realize', ret_socket='geometry'),
+    },
+    'GeometryNodeRotateInstances': {
+        'Instances': StackMethod(fname='rotate', instances='self'),
+        'Instance':  DomStackMethod(fname='rotate', instances='self'),
+    },
+    'GeometryNodeScaleInstances': {
+        'Instances': StackMethod(fname='set_scale', instances='self'),
+        'Instance':  DomStackMethod(fname='set_scale', instances='self'),
+    },
+    'GeometryNodeTranslateInstances': {
+        'Instances': StackMethod(fname='translate', instances='self'),
+        'Instance':  DomStackMethod(fname='translate', instances='self'),
+    },
+    'GeometryNodeInputInstanceScale': {
+        'Instances': PropAttribute(fname='scale',    ret_socket='scale'),
+        'Instance':  DomPropAttribute(fname='scale', ret_socket='scale'),
+    },
+    'GeometryNodeInputInstanceRotation': {
+        'Instances': PropAttribute(fname='rotation',    ret_socket='rotation'),
+        'Instance':  DomPropAttribute(fname='rotation', ret_socket='rotation'),
+    },    
+}
+
+MATERIAL = {
+    'GeometryNodeReplaceMaterial': {
+        'Geometry': StackMethod(geometry='self'),
+    },
+    'GeometryNodeInputMaterialIndex': {
+        'Geometry': PropAttribute(ret_socket='material_index'),
+        'Domain':   DomPropAttribute(ret_socket='material_index'),
+    },
+    'GeometryNodeMaterialSelection': {
+        'Geometry': Attribute(ret_socket='selection'),
+        'Domain':   DomAttribute(ret_socket='selection'),
+    },
+    'GeometryNodeSetMaterial': {
+        'Geometry': StackMethod(geometry='self'),
+        'Domain':   DomPropAttribute(fname='material', geometry='self', material='attr_value'),
+    },
+    'GeometryNodeSetMaterialIndex': {
+        'Geometry': StackMethod(geometry='self'),
+        'Domain':   DomStackMethod(geometry='self'),
+    },
+}
+
+MESH = {
+    'GeometryNodeDualMesh': {
+        'Mesh': Method(ret_socket='dual_mesh', ret_class='Mesh'),
+    },
+    'GeometryNodeEdgePathsToCurves': {
+        'Mesh': Attribute(   mesh='self', ret_socket='curves', ret_class='Curve'),
+        'Edge': DomAttribute(mesh='self', ret_socket='curves', ret_class='Curve'),
+    },
+    'GeometryNodeEdgePathsToSelection': {
+        'Mesh': Method(mesh='self', ret_socket='selection'),
+    },
+    'GeometryNodeExtrudeMesh': {
+        'Mesh':   StackMethod(fname='extrude', mesh='self', ret_socket=('top', 'side')),
+        'Face':   DomStackMethod(fname='extrude', mesh='self', ret_socket=('top', 'side'), mode="'FACES'"),
+        'Edge':   DomStackMethod(fname='extrude', mesh='self', ret_socket=('top', 'side'), mode="'EDGES'"),
+        'Vertex': DomStackMethod(fname='extrude', mesh='self', ret_socket=('top', 'side'), mode="'VERTICES'"),
+    },
+    'GeometryNodeFlipFaces': {
+        'Mesh':   StackMethod(mesh='self'),
+        'Face':   DomStackMethod(fname='flip', mesh='self'),
+    },
+    'GeometryNodeMeshBoolean': {
+        'Mesh':   [
+            StackMethod(mesh='self', fname='boolean_intersect',  ret_socket='intersecting_edges', operation="'INTERSECT'", first_arg=None, mesh_1=None),
+            StackMethod(mesh='self', fname='boolean_union',      ret_socket='intersecting_edges', operation="'UNION'",     first_arg=None, mesh_1=None),
+            StackMethod(mesh='self', fname='boolean_difference', ret_socket='intersecting_edges', operation="'DIFFERENCE'", mesh_1='self'),
+            ],
+    },
+    'GeometryNodeMeshToCurve': {
+        'Mesh': Method(   fname='to_curve', mesh='self', ret_socket='curve', ret_class='Curve'),
+        'Edge': DomMethod(fname='to_curve', mesh='self', ret_socket='curve', ret_class='Curve'),
+    },
+    'GeometryNodeMeshToPoints': {
+        'Mesh':   Method(   fname='to_points', mesh='self', ret_socket='points', ret_class='Points'),
+        'Vertex': DomMethod(fname='to_points', mesh='self', ret_socket='points', ret_class='Points'),
+    },
+    'GeometryNodeMeshToVolume': {
+        'Mesh':   Method(   fname='to_volume', mesh='self', ret_socket='volume', ret_class='Volume'),
+        'Vertex': DomMethod(fname='to_volume', mesh='self', ret_socket='volume', ret_class='Volume'),
+    },
+    'GeometryNodeSampleNearestSurface': {
+        'Mesh':   Method(mesh='self', ret_socket='value', dtype=('data_type', 'value')),
+    },
+    'GeometryNodeSampleUVSurface': {
+        'Mesh':   Method(mesh='self', ret_socket=('value', 'is_valid'), dtype=('data_type', 'value')),
+    },
+    'GeometryNodeScaleElements': {
+        'Mesh':   [
+            StackMethod(geometry='self'),
+            StackMethod(geometry='self',    fname='scale_uniform',     scale_mode="'UNIFORM'", axis=None),
+            StackMethod(geometry='self',    fname='scale_single_axis', scale_mode="'SINGLE_AXIS'"),
+            ],
+        'Face': [
+            DomStackMethod(geometry='self', fname='scale_uniform',     scale_mode="'UNIFORM'", axis=None),
+            DomStackMethod(geometry='self', fname='scale_single_axis', scale_mode="'SINGLE_AXIS'"),
+            ],
+        'Edge': [
+            DomStackMethod(geometry='self', fname='scale_uniform',     scale_mode="'UNIFORM'", axis=None),
+            DomStackMethod(geometry='self', fname='scale_single_axis', scale_mode="'SINGLE_AXIS'"),
+            ],
+    },
+    'GeometryNodeSplitEdges': {
+        'Mesh': StackMethod(   mesh='self'),
+        'Edge': DomStackMethod(mesh='self', fname='split'),
+    },
+    'GeometryNodeSubdivideMesh': {
+        'Mesh': StackMethod(mesh='self', fname='subdivide'),
+    },
+    'GeometryNodeSubdivisionSurface': {
+        'Mesh': StackMethod(mesh='self'),
+    },
+    'GeometryNodeTriangulate': {
+        'Mesh': StackMethod(mesh='self'),
+        'Face': DomStackMethod(mesh='self'),
+    },
+    'GeometryNodeInputMeshEdgeAngle': {
+        'Edge': [
+            DomPropAttribute(fname='angle', cache=True),
+            DomPropAttribute(fname='unisgned_angle', cache=True, ret_socket='unsigned_angle'),
+            DomPropAttribute(fname='signed_angle', cache=True, ret_socket='signed_angle'),
+            ],
+    },
+    'GeometryNodeInputMeshEdgeNeighbors': {
+        'Edge': DomPropAttribute(fname='neighbors', ret_socket='face_count'),
+    },
+    'GeometryNodeInputMeshEdgeVertices': {
+        'Edge': [
+            DomPropAttribute(fname='vertices',          cache=True),
+            DomPropAttribute(fname='vertices_index',    cache=True, ret_socket=('vertex_index_1', 'vertex_index_2')),
+            DomPropAttribute(fname='vertices_position', cache=True, ret_socket=('position_1', 'position_2')),
+            ],
+    },
+    'GeometryNodeInputMeshFaceArea': {
+        'Face': DomPropAttribute(fname='area'),
+    },
+    'GeometryNodeInputMeshFaceNeighbors': {
+        'Face': [
+            DomPropAttribute(fname='neighbors',               cache=True),
+            DomPropAttribute(fname='neighbors_vertex_count',  cache=True, ret_socket='vertex_count'),
+            DomPropAttribute(fname='neighbors_face_count',    cache=True, ret_socket='face_count'),
+            ],
+    },
+    'GeometryNodeMeshFaceSetBoundaries': {
+        'Mesh': Attribute(ret_socket='boundary_edges'),
+        'Face': DomAttribute(face_set='self.selection_index', ret_socket='boundary_edges'),
+    },
+    'GeometryNodeInputMeshFaceIsPlanar': {
+        'Mesh': Attribute(ret_socket='planar'),
+        'Face': DomAttribute(fname='is_planar', ret_socket='planar'),
+    },
+    'GeometryNodeInputShadeSmooth': {
+        'Mesh': Attribute(ret_socket='smooth'),
+        'Face': DomPropAttribute(fname='shade_smooth', ret_socket='smooth'),
+    },
+    'GeometryNodeInputMeshIsland': {
+        'Mesh': [
+            PropAttribute(fname='island', cache=True),
+            PropAttribute(fname='island_index', cache=True, ret_socket='island_index'),
+            PropAttribute(fname='island_count', cache=True, ret_socket='island_count'),
+            ],
+    },
+    'GeometryNodeInputShortestEdgePaths': {
+        'Mesh': Attribute(ret_socket=('next_vertex_index', 'total_cost')),
+    },
+    'GeometryNodeInputMeshVertexNeighbors': {
+        'Vertex': [
+            DomPropAttribute(fname='neighbors',               cache=True),
+            DomPropAttribute(fname='neighbors_vertex_count',  cache=True, ret_socket='vertex_count'),
+            DomPropAttribute(fname='neighbors_face_count',    cache=True, ret_socket='face_count'),
+            ],
+    },
+    'GeometryNodeSetShadeSmooth': {
+        'Mesh': StackMethod(geometry='self'),
+        'Face': [
+            DomStackMethod(geometry='self'),
+            DomSetter(fname='shade_smooth', geometry='self'),
+            ],
+    },
+}
+
+MESH_PRIMITIVES = {
+    'GeometryNodeMeshCone': {
+        'Mesh': Static(fname='Cone', ret_socket=('mesh', 'top', 'bottom', 'side'), ret_class=('Mesh', None, None, None))
+    },
+    'GeometryNodeMeshCube': {
+        'Mesh': Constructor(fname='Cube', ret_socket='mesh')
+    },
+    'GeometryNodeMeshCylinder': {
+        'Mesh': Static(fname='Cylinder', ret_socket=('mesh', 'top', 'bottom', 'side'), ret_class=('Mesh', None, None, None))
+    },
+    'GeometryNodeMeshGrid': {
+        'Mesh': Constructor(fname='Grid', ret_socket='mesh')
+    },
+    'GeometryNodeMeshIcoSphere': {
+        'Mesh': Constructor(fname='IcoSphere', ret_socket='mesh')
+    },
+    'GeometryNodeMeshCircle': {
+        'Mesh': Constructor(fname='Circle', ret_socket='mesh')
+    },
+    'GeometryNodeMeshLine': {
+        'Mesh': [
+            Constructor(fname='Line',                    ret_socket='mesh'),
+            Constructor(fname='LineEndPoints',           ret_socket='mesh', mode='END_POINTS', count_mode="'TOTAL'",      resolution=None,
+                        arg_rename={'offset': 'end_location'}),
+            Constructor(fname='LineOffset',              ret_socket='mesh', mode='OFFSET',     count_mode="'TOTAL'",      resolution=None),
+            Constructor(fname='LineEndPointsResolution', ret_socket='mesh', mode='END_POINTS', count_mode="'RESOLUTION'", count=None,
+                        arg_rename={'offset': 'end_location'}),
+            Constructor(fname='LineOffsetResolution',    ret_socket='mesh', mode='OFFSET',     count_mode="'RESOLUTION'", count=None),
+            ],
+    },
+    'GeometryNodeMeshUVSphere': {
+        'Mesh': Constructor(fname='Circle', ret_socket='mesh'),
+    },
+}
+
+POINT = {
+    'GeometryNodeDistributePointsInVolume': {
+        'Volume': [
+            Method(volume='self', ret_socket='points', ret_class='Points', fname='distribute_points',),
+            Method(volume='self', ret_socket='points', ret_class='Points', fname='distribute_points_random', mode="'DENSITY_RANDOM'", spacing=None, threshold=None),
+            Method(volume='self', ret_socket='points', ret_class='Points', fname='distribute_points_grid',   mode="'DENSITY_GRID'", density=None, seed=None),
+            ],
+    },
+    'GeometryNodeDistributePointsOnFaces': {
+        'Mesh': Method(mesh='self', ret_socket=('points', 'normal', 'rotation'), ret_class=('Points', None, None), fname='distribute_points_on_faces',),
+        'Face': [
+            DomMethod(mesh='self', ret_socket=('points', 'normal', 'rotation'), ret_class=('Points', None, None),
+                fname='distribute_points_random', distribute_method="'RANDOM'", distance_min=None, density_max=None, density_factor=None),
+            DomMethod(mesh='self', ret_socket=('points', 'normal', 'rotation'), ret_class=('Points', None, None),
+                fname='distribute_points_poisson', distribute_method="'POISSON'", density=None),
+            ]
+    },
+    'GeometryNodePoints': {
+        'Points': Constructor(fname='Points', ret_socket='geometry'),
+    },
+    'GeometryNodePointsToVertices': {
+        'Points':     Method(fname='to_vertices', ret_socket='mesh', ret_class='Mesh'),
+        'CloudPoint': DomMethod(fname='to_vertices', ret_socket='mesh', ret_class='Mesh'),
+    },
+    'GeometryNodePointsToVolume': {
+        'Points':  [
+            Method(fname='to_volume',        points='self', ret_socket='volume', ret_class='Volume'),
+            Method(fname='to_volume_size',   points='self', ret_socket='volume', ret_class='Volume', resolution_mode="'VOXEL_SIZE'", voxel_amount=None),
+            Method(fname='to_volume_amount', points='self', ret_socket='volume', ret_class='Volume', resolution_mode="'VOXEL_AMOUNT'", voxel_size=None),
+            ]
+    },
+    'GeometryNodeSetPointRadius': {
+        'Points': StackMethod(points='self'),
+        'CloudPoint': DomSetter(fname='radius', points='self', radius='attr_value'),
+        
+    },
 }
 
 
