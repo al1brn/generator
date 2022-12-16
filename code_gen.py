@@ -1360,6 +1360,308 @@ POINT = {
     },
 }
 
+STRING = {
+    'GeometryNodeStringJoin': {
+        'function': Function(ret_socket='string'),
+        'String':   Method(fname='join', first_arg=None, ret_socket='string'),
+    },
+    'FunctionNodeReplaceString': {
+        'function': Function(ret_socket='string'),
+        'String':   Method(fname='replace', string='self', ret_socket='string'),
+    },
+    'FunctionNodeSliceString': {
+        'function': Function(ret_socket='string'),
+        'String':   Method(fname='slice', string='self', ret_socket='string'),
+    },
+    'FunctionNodeStringLength': {
+        'function': Function(ret_socket='length'),
+        'String':   Property(fname='length', string='self', ret_socket='length'),
+    },
+    'GeometryNodeStringToCurves': {
+        'function': Function(ret_socket=('curve_instances', 'line', 'pivot_point'), ret_class=('Instances', None, None)),
+        'String':   Method(fname='to_curves', ret_socket=('curve_instances', 'line', 'pivot_point'), ret_class=('Instances', None, None)),
+    },
+    'FunctionNodeValueToString': {
+        'function' : Function(ret_socket='string'),
+        'Float'    : Method(fname='to_string', value='self', ret_socket='string'),
+        'Integer'  : Method(fname='to_string', value='self', ret_socket='string', decimals=0),
+    },
+    'FunctionNodeInputSpecialCharacters': {
+        'String': [
+            Static(fname='LineBreak', ret_socket='line_break'),
+            Static(fname='Tab', ret_socket='tab'),
+            ],
+    },
+}
+
+TEXTURE = {
+    'ShaderNodeTexBrick': {
+        'Texture': Static(fname='brick', ret_socket=('color', 'fac')),
+    },
+    'ShaderNodeTexChecker': {
+        'Texture': Static(fname='checker', ret_socket=('color', 'fac')),
+    },
+    'ShaderNodeTexGradient': {
+        'Texture': [
+            Static(fname='gradient',                  ret_socket=('color', 'fac')),
+            Static(fname='gradient_linear',           ret_socket=('color', 'fac'), gradient_type="'LINEAR'"),
+            Static(fname='gradient_quadratic',        ret_socket=('color', 'fac'), gradient_type="'QUADRATIC'"),
+            Static(fname='gradient_easing',           ret_socket=('color', 'fac'), gradient_type="'EASING'"),
+            Static(fname='gradient_diagonal',         ret_socket=('color', 'fac'), gradient_type="'DIAGONAL'"),
+            Static(fname='gradient_spherical',        ret_socket=('color', 'fac'), gradient_type="'SPHERICAL'"),
+            Static(fname='gradient_quadratic_sphere', ret_socket=('color', 'fac'), gradient_type="'QUADRATIC_SPHERE'"),
+            Static(fname='gradient_radial',           ret_socket=('color', 'fac'), gradient_type="'RADIAL'"),
+            ],
+    },
+    'GeometryNodeImageTexture': {
+        'Texture': Static(fname='image', ret_socket=('color', 'alpha')),
+        'Image'  : Method(fname='texture', image='self', ret_socket=('color', 'alpha')),
+    },
+    'ShaderNodeTexMagic': {
+        'Texture': Static(fname='magic', ret_socket=('color', 'fac')),
+    },
+    'ShaderNodeTexMusgrave': {
+        'Texture': Static(fname='musgrave', ret_socket='fac'),
+    },
+    'ShaderNodeTexNoise': {
+        'Texture': [
+            Static(fname='noise',    ret_socket=('color', 'fac')),
+            Static(fname='noise_1D', ret_socket=('color', 'fac'), noise_dimensions="'1D'", vector=None),
+            Static(fname='noise_2D', ret_socket=('color', 'fac'), noise_dimensions="'2D'", w=None),
+            Static(fname='noise_3D', ret_socket=('color', 'fac'), noise_dimensions="'3D'", w=None),
+            Static(fname='noise_4D', ret_socket=('color', 'fac'), noise_dimensions="'4D'"),
+            ],
+    },
+    'ShaderNodeTexVoronoi': {
+        'Texture': [
+            Static(fname='voronoi',    ret_socket=('distance', 'color', 'position', 'w')),
+            Static(fname='voronoi_1D', ret_socket=('distance', 'color', 'w'),             vector=None),
+            Static(fname='voronoi_2D', ret_socket=('distance', 'color', 'position'),      w=None),
+            Static(fname='voronoi_3D', ret_socket=('distance', 'color', 'position'),      w=None),
+            Static(fname='voronoi_4D', ret_socket=('distance', 'color', 'position', 'w')),
+            ],
+    },
+    'ShaderNodeTexWave': {
+        'Texture': [
+            Static(fname='wave', ret_socket=('color', 'fac')),
+            Static(fname='wave_bands', ret_socket=('color', 'fac'), wave_type="'BANDS'", rings_direction=None,
+                          arg_rename={'bands_direction': 'direction'}),
+            Static(fname='wave_rings', ret_socket=('color', 'fac'), wave_type="'RINGS'", bands_direction=None,
+                          arg_rename={'rings_direction': 'direction'}),
+        
+            Static(fname='wave_bands_sine', ret_socket=('color', 'fac'), wave_type="'BANDS'", rings_direction=None, wave_profile="'SIN'",
+                          arg_rename={'bands_direction': 'direction'}),
+            Static(fname='wave_bands_saw', ret_socket=('color', 'fac'), wave_type="'BANDS'", rings_direction=None, wave_profile="'SAW'",
+                          arg_rename={'bands_direction': 'direction'}),
+            Static(fname='wave_bands_triangle', ret_socket=('color', 'fac'), wave_type="'BANDS'", rings_direction=None, wave_profile="'TRIANGLE'",
+                          arg_rename={'bands_direction': 'direction'}),
+
+            Static(fname='wave_rings_sine', ret_socket=('color', 'fac'), wave_type="'RINGS'", bands_direction=None, wave_profile="'SIN'",
+                          arg_rename={'rings_direction': 'direction'}),
+            Static(fname='wave_rings_saw', ret_socket=('color', 'fac'), wave_type="'RINGS'", bands_direction=None, wave_profile="'SAW'",
+                          arg_rename={'rings_direction': 'direction'}),
+            Static(fname='wave_rings_triangle', ret_socket=('color', 'fac'), wave_type="'RINGS'", bands_direction=None, wave_profile="'TRIANGLE'",
+                          arg_rename={'rings_direction': 'direction'}),
+            ],
+    },
+    'ShaderNodeTexWhiteNoise': {
+        'Texture': [
+            Static(fname='white_noise',    ret_socket=('value', 'color')),
+            Static(fname='white_noise_1D', ret_socket=('value', 'color'), noise_dimensions = "'1D'", vector=None),
+            Static(fname='white_noise_2D', ret_socket=('value', 'color'), noise_dimensions = "'2D'", w=None),
+            Static(fname='white_noise_3D', ret_socket=('value', 'color'), noise_dimensions = "'3D'", w=None),
+            Static(fname='white_noise_4D', ret_socket=('value', 'color'), noise_dimensions = "'3D'"),
+            ],
+    },
+}
+
+UTILITIES = {
+    'GeometryNodeAccumulateField': {
+        'Domain': DomAttribute(ret_socket=('leading', 'trailing', 'total'), dtype=('data_type', 'value')),
+    },
+    'FunctionNodeAlignEulerToVector': {
+        'function': Function(ret_socket='rotation'),
+        'Vector': StackMethod(rotation='self'),
+    },
+    'FunctionNodeBooleanMath': {
+        'function': [
+            Function(fname='b_and', ret_socket='boolean', operation='AND'),
+            Function(fname='b_or',  ret_socket='boolean', operation='OR'),
+            Function(fname='b_not', ret_socket='boolean', operation='NOT', boolean1=None),
+            Function(fname='nand',  ret_socket='boolean', operation='NAND'),
+            Function(fname='nor',   ret_socket='boolean', operation='NOR'),
+            Function(fname='xnor',  ret_socket='boolean', operation='XNOR'),
+            Function(fname='xor',   ret_socket='boolean', operation='XOR'),
+            Function(fname='imply', ret_socket='boolean', operation='IMPLY'),
+            Function(fname='nimply',ret_socket='boolean', operation='NIMPLY'),
+            ],
+        'Boolean': [
+            Method(fname='b_and',   boolean0='self', ret_socket='boolean', operation='AND'),
+            Method(fname='b_or',    boolean0='self', ret_socket='boolean', operation='OR'),
+            Method(fname='b_not',   boolean0='self', ret_socket='boolean', operation='NOT', boolean1=None),
+            Method(fname='nand',    boolean0='self', ret_socket='boolean', operation='NAND'),
+            Method(fname='nor',     boolean0='self', ret_socket='boolean', operation='NOR'),
+            Method(fname='xnor',    boolean0='self', ret_socket='boolean', operation='XNOR'),
+            Method(fname='xor',     boolean0='self', ret_socket='boolean', operation='XOR'),
+            Method(fname='imply',   boolean0='self', ret_socket='boolean', operation='IMPLY'),
+            Method(fname='nimply',  boolean0='self', ret_socket='boolean', operation='NIMPLY'),
+            ],
+    },
+    'ShaderNodeClamp': {
+        'function': [
+            Function(ret_socket='result'),
+            Function(ret_socket='result', fname='clamp_min_max', clamp_type="'MINMAX'"),
+            Function(ret_socket='result', fname='clamp_range',   clamp_type="'RANGE'"),
+            ],
+        'Float': [
+            Method(ret_socket='result', value='self'),
+            Method(ret_socket='result', value='self', fname='clamp_min_max', clamp_type="'MINMAX'"),
+            Method(ret_socket='result', value='self', fname='clamp_range',   clamp_type="'RANGE'"),
+            ],
+    },
+    'FunctionNodeCompare': {
+        'function': Function(ret_socket='result'),
+        'Float': [
+            Method(a='self', ret_socket='result', data_type="'FLOAT'", c=None, angle=None, mode="'ELEMENT'"),
+            Method(a='self', ret_socket='result', data_type="'FLOAT'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='less_than', operation="'LESS_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'FLOAT'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='less_equal', operation="'LESS_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'FLOAT'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='greater_than', operation="'GREATER_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'FLOAT'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='greater_equal', operation="'GREATER_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'FLOAT'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='equal', operation="'EQUAL'"),
+            Method(a='self', ret_socket='result', data_type="'FLOAT'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='not_equal', operation="'NOT_EQUAL'"),
+            ],
+        'Integer': [
+            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='less_than', operation="'LESS_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='less_equal', operation="'LESS_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='greater_than', operation="'GREATER_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='greater_equal', operation="'GREATER_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='equal', operation="'EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='not_equal', operation="'NOT_EQUAL'", epsilon=None),
+            ],
+        'String': [
+            Method(a='self', ret_socket='result', data_type="'STRING'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='equal', operation="'EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'STRING'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='not_equal', operation="'NOT_EQUAL'", epsilon=None),
+            ],
+        'Vector': [
+            Method(a='self', ret_socket='result', data_type="'VECTOR'"),
+
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='elements_less_than', operation="'LESS_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='elements_less_equal', operation="'LESS_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='elements_greater_than', operation="'GREATER_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='elements_greater_equal', operation="'GREATER_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='elements_equal', operation="'EQUAL'"),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='elements_not_equal', operation="'NOT_EQUAL'"),
+
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'LENGTH'",
+                   fname='length_less_than', operation="'LESS_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'LENGTH'",
+                   fname='length_less_equal', operation="'LESS_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'LENGTH'",
+                   fname='length_greater_than', operation="'GREATER_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'LENGTH'",
+                   fname='length_greater_equal', operation="'GREATER_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'LENGTH'",
+                   fname='length_equal', operation="'EQUAL'"),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'LENGTH'",
+                   fname='length_not_equal', operation="'NOT_EQUAL'"),
+
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'AVERAGE'",
+                   fname='average_less_than', operation="'LESS_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'AVERAGE'",
+                   fname='average_less_equal', operation="'LESS_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'AVERAGE'",
+                   fname='average_greater_than', operation="'GREATER_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'AVERAGE'",
+                   fname='average_greater_equal', operation="'GREATER_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'AVERAGE'",
+                   fname='average_equal', operation="'EQUAL'"),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, angle=None, mode="'AVERAGE'",
+                   fname='average_not_equal', operation="'NOT_EQUAL'"),
+            
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", angle=None, mode="'DOT_PRODUCT'",
+                   fname='dot_product_less_than', operation="'LESS_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", angle=None, mode="'DOT_PRODUCT'",
+                   fname='dot_product_less_equal', operation="'LESS_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", angle=None, mode="'DOT_PRODUCT'",
+                   fname='dot_product_greater_than', operation="'GREATER_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", angle=None, mode="'DOT_PRODUCT'",
+                   fname='dot_product_greater_equal', operation="'GREATER_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", angle=None, mode="'DOT_PRODUCT'",
+                   fname='dot_product_equal', operation="'EQUAL'"),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", angle=None, mode="'DOT_PRODUCT'",
+                   fname='dot_product_not_equal', operation="'NOT_EQUAL'"),
+            
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, mode="'DIRECTION'",
+                   fname='direction_less_than', operation="'LESS_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, mode="'DIRECTION'",
+                   fname='direction_less_equal', operation="'LESS_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, mode="'DIRECTION'",
+                   fname='direction_greater_than', operation="'GREATER_THAN'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, mode="'DIRECTION'",
+                   fname='direction_greater_equal', operation="'GREATER_EQUAL'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, mode="'DIRECTION'",
+                   fname='direction_equal', operation="'EQUAL'"),
+            Method(a='self', ret_socket='result', data_type="'VECTOR'", c=None, mode="'DIRECTION'",
+                   fname='direction_not_equal', operation="'NOT_EQUAL'"),
+            ],
+        
+        'Color': [
+            Method(a='self', ret_socket='result', data_type="'COLOR'", c=None, angle=None, mode="'ELEMENT'"),
+            Method(a='self', ret_socket='result', data_type="'COLOR'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='darker', operation="'DARKER'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'COLOR'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='brighter', operation="'BRIGHTER'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'COLOR'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='equal', operation="'EQUAL'"),
+            Method(a='self', ret_socket='result', data_type="'COLOR'", c=None, angle=None, mode="'ELEMENT'",
+                   fname='equal', operation="'EQUAL'"),
+            ],
+        
+        
+        
+        
+    },
+    'GeometryNodeFieldAtIndex': {
+    },
+    'ShaderNodeFloatCurve': {
+    },
+    'FunctionNodeFloatToInt': {
+    },
+    'ShaderNodeMapRange': {
+    },
+    'ShaderNodeMath': {
+    },
+    'FunctionNodeRandomValue': {
+    },
+    'FunctionNodeRotateEuler': {
+    },
+    'GeometryNodeSwitch': {
+    },
+    'GeometryNodeFieldOnDomain': {
+    },
+}
+
 
 # ----------------------------------------------------------------------------------------------------
 # Mix color functions and methods

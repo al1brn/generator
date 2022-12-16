@@ -426,34 +426,15 @@ NODES_MENU = {
     "string_to_curves"           : ("text"                      , "text/string_to_curves"                 ),
     "value_to_string"            : ("text"                      , "text/value_to_string"                  ),
 
-    "brick"                      : ("texture"                   , "texture/brick"                         ),
     "brick_texture"              : ("texture"                   , "texture/brick"                         ),
-    
-    "checker"                    : ("texture"                   , "texture/checker"                       ),
     "checker_texture"            : ("texture"                   , "texture/checker"                       ),
-    
-    "gradient"                   : ("texture"                   , "texture/gradient"                      ),
     "gradient_texture"           : ("texture"                   , "texture/gradient"                      ),
-
-    "image"                      : ("texture"                   , "texture/image"                         ),
     "image_texture"              : ("texture"                   , "texture/image"                         ),
-    
-    "magic"                      : ("texture"                   , "texture/magic"                         ),
     "magic_texture"              : ("texture"                   , "texture/magic"                         ),
-    
-    "musgrave"                   : ("texture"                   , "texture/musgrave"                      ),
     "musgrave_texture"           : ("texture"                   , "texture/musgrave"                      ),
-    
-    "noise"                      : ("texture"                   , "texture/noise"                         ),
     "noise_texture"              : ("texture"                   , "texture/noise"                         ),
-    
-    "voronoi"                    : ("texture"                   , "texture/voronoi"                       ),
     "voronoi_texture"            : ("texture"                   , "texture/voronoi"                       ),
-    
-    "wave"                       : ("texture"                   , "texture/wave"                          ),
     "wave_texture"               : ("texture"                   , "texture/wave"                          ),
-    
-    "white_noise"                : ("texture"                   , "texture/white_noise"                   ),
     "white_noise_texture"        : ("texture"                   , "texture/white_noise"                   ),
 
     "accumulate_field"           : ("utilities"                 , "utilities/accumulate_field"            ),
