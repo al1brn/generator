@@ -468,7 +468,6 @@ NODES_MENU = {
 }
 
 
-
 # ====================================================================================================
 # Some nodes need to reorder the input sockets for more natural use
 # Example : the input sockets node ShaderNodeMixRGB are order fac, color1, color2
@@ -905,10 +904,13 @@ class Arguments(list):
         
         fixed_args = {**kwargs}
         if 'arg_rename' in fixed_args:
-            arg_rename = fixed_args['arg_rename']
+            arg_rename = {**fixed_args['arg_rename']}
             del fixed_args['arg_rename']
         else:
             arg_rename = {}
+
+        if 'use_clamp' not in arg_rename:
+            arg_rename['use_clamp'] = 'clamp'
             
         # ---------------------------------------------------------------------------
         # We make two passes:
@@ -955,10 +957,13 @@ class Arguments(list):
         
         fixed_args = {**kwargs}
         if 'arg_rename' in fixed_args:
-            arg_rename = fixed_args['arg_rename']
+            arg_rename = {**fixed_args['arg_rename']}
             del fixed_args['arg_rename']
         else:
             arg_rename = {}
+            
+        if 'use_clamp' not in arg_rename:
+            arg_rename['use_clamp'] = 'clamp'
             
         # ---------------------------------------------------------------------------
         # We make two passes:
@@ -1284,7 +1289,7 @@ class WNode:
        'draw_buttons_ext', 'height', 'hide', 'input_template', 'inputs', 'internal_links',
        'is_registered_node_type', 'label', 'location', 'mute', 'name', 'output_template', 'outputs',
        'parent', 'poll', 'poll_instance', 'rna_type', 'select', 'show_options', 'show_preview',
-       'show_texture', 'socket_value_update', 'type', 'update', 'use_clamp', 'use_custom_color',
+       'show_texture', 'socket_value_update', 'type', 'update', 'use_custom_color',
        'width', 'width_hidden']
     
     def __init__(self, bnode):

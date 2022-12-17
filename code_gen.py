@@ -29,6 +29,7 @@ CLASSES = {
     'Vector'        : ('data', 'geosocks.Vector'),
     'Color'         : ('data', 'geosocks.Color'),
     'String'        : ('data', 'geosocks.String'),
+    'Rotation'      : ('data', 'Vector'),
     
     # Blender
 
@@ -456,6 +457,7 @@ class PropReadError(Generator):
 # Class generator
 
 class ClassGenerator(dict):
+    
     def __init__(self, wnodes):
         super().__init__()
         self.wnodes = wnodes
@@ -468,19 +470,30 @@ class ClassGenerator(dict):
             
             if wnode is None:
                 raise Exception(f"ERROR: node {blid} not found")
-            
-            for class_name, generators in classes.items():
                 
-                if class_name not in self.keys():
-                    self[class_name] = {}
-                    
-                if blid not in self[class_name]:
-                    self[class_name][blid] = []
+            for cnames, generators in classes.items():
                 
-                if isinstance(generators, list):
-                    self[class_name][blid].extend(generators)
+                # ----- cnames can be class name or tuple of class names
+                
+                if isinstance(cnames, tuple):
+                    class_names = cnames
                 else:
-                    self[class_name][blid].append(generators)
+                    class_names = (cnames,)
+                    
+                for class_name in class_names:
+                    
+                    if class_name not in self.keys():
+                        self[class_name] = {}
+                        
+                    if blid not in self[class_name]:
+                        self[class_name][blid] = []
+                    
+                    if isinstance(generators, list):
+                        self[class_name][blid].extend(generators)
+                    else:
+                        self[class_name][blid].append(generators)
+                        
+                        
                     
     def gen_class(self, class_name, no_setter=False):
         
@@ -532,6 +545,7 @@ class ClassGenerator(dict):
                     f.write("\n\n")
         
     def create_one_file(self, file_name, no_setter=False, select=None):
+        
         
         with open(file_name, 'w') as f:
             
@@ -1637,30 +1651,341 @@ UTILITIES = {
             Method(a='self', ret_socket='result', data_type="'COLOR'", c=None, angle=None, mode="'ELEMENT'",
                    fname='equal', operation="'EQUAL'"),
             ],
-        
-        
-        
-        
     },
     'GeometryNodeFieldAtIndex': {
+        'Geometry': Attribute(ret_socket='value', dtype=('data_type', 'value')),
+        'Domain'  : DomAttribute(ret_socket='value', dtype=('data_type', 'value')),
     },
     'ShaderNodeFloatCurve': {
+        'Float' : Method(value='self', ret_socket='value'),
     },
     'FunctionNodeFloatToInt': {
+        'Float' : [
+            Method(float='self', ret_socket='integer', fname='to_integer'),
+            Method(float='self', ret_socket='integer', fname='round',    rounding_mode="'ROUND'"),
+            Method(float='self', ret_socket='integer', fname='floor',    rounding_mode="'FLOOR'"),
+            Method(float='self', ret_socket='integer', fname='ceiling',  rounding_mode="'CEILING'"),
+            Method(float='self', ret_socket='integer', fname='truncate', rounding_mode="'TRUNCATE'"),
+            ],
     },
     'ShaderNodeMapRange': {
+        'Float': [
+            Method(value='self', ret_socket='result', vector=None, data_type="'FLOAT'"),
+            Method(value='self', ret_socket='result', vector=None, data_type="'FLOAT'", fname='map_range_linear',   interpolation_type="'LINEAR'", steps=None),
+            Method(value='self', ret_socket='result', vector=None, data_type="'FLOAT'", fname='map_range_stepped',  interpolation_type="'STEPPED'"),
+            Method(value='self', ret_socket='result', vector=None, data_type="'FLOAT'", fname='map_range_smooth',   interpolation_type="'SMOOTHSTEP'", steps=None),
+            Method(value='self', ret_socket='result', vector=None, data_type="'FLOAT'", fname='map_range_smoother', interpolation_type="'SMOOTHERSTEP'", steps=None),
+            ],
+        'Vector': [
+            Method(vector='self', ret_socket='vector', value=None, data_type="'FLOAT_VECTOR'"),
+            Method(vector='self', ret_socket='vector', value=None, data_type="'FLOAT_VECTOR'", fname='map_range_linear',   interpolation_type="'LINEAR'", steps=None),
+            Method(vector='self', ret_socket='vector', value=None, data_type="'FLOAT_VECTOR'", fname='map_range_stepped',  interpolation_type="'STEPPED'"),
+            Method(vector='self', ret_socket='vector', value=None, data_type="'FLOAT_VECTOR'", fname='map_range_smooth',   interpolation_type="'SMOOTHSTEP'", steps=None),
+            Method(vector='self', ret_socket='vector', value=None, data_type="'FLOAT_VECTOR'", fname='map_range_smoother', interpolation_type="'SMOOTHERSTEP'", steps=None),
+            ],
     },
     'ShaderNodeMath': {
+        'function': [
+            Function(ret_socket='value'),
+            
+            Function(ret_socket='value', fname='add',             operation="'ADD'",          value2=None),
+            Function(ret_socket='value', fname='subtract',        operation="'SUBTRACT'",     value2=None),
+            Function(ret_socket='value', fname='sub',             operation="'SUBTRACT'",     value2=None),
+            Function(ret_socket='value', fname='multiply',        operation="'MULTIPLY'",     value2=None),
+            Function(ret_socket='value', fname='mul',             operation="'MULTIPLY'",     value2=None),
+            Function(ret_socket='value', fname='divide',          operation="'DIVIDE'",       value2=None),
+            Function(ret_socket='value', fname='div',             operation="'DIVIDE'",       value2=None),
+            Function(ret_socket='value', fname='multiply_add',    operation="'MULTIPLY_ADD'", arg_rename={'value0': 'value', 'value1': 'multiplier', 'value2': 'addend'}),
+            Function(ret_socket='value', fname='mul_add',         operation="'MULTIPLY_ADD'", arg_rename={'value0': 'value', 'value1': 'multiplier', 'value2': 'addend'}),
+
+            Function(ret_socket='value', fname='power',           operation="'POWER'",        arg_rename={'value0': 'base', 'value1': 'exponent'}, value2=None),
+            Function(ret_socket='value', fname='logarithm',       operation="'LOGARITHM'",    arg_rename={'value0': 'value', 'value1': 'base'}, value2=None),
+            Function(ret_socket='value', fname='log',             operation="'LOGARITHM'",    arg_rename={'value0': 'value', 'value1': 'base'}, value2=None),
+            Function(ret_socket='value', fname='sqrt',            operation="'SQRT'",         arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='inverse_sqrt',    operation="'INVERSE_SQRT'", arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='absolute',        operation="'ABSOLUTE'",     arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='abs',             operation="'ABSOLUTE'",     arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='exponent',        operation="'EXPONENT'",     arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='exp',             operation="'EXPONENT'",     arg_rename={'value0': 'value'}, value1=None, value2=None),
+
+            Function(ret_socket='value', fname='minimum',         operation="'MINIMUM'",      value2=None),
+            Function(ret_socket='value', fname='min',             operation="'MINIMUM'",      value2=None),
+            Function(ret_socket='value', fname='maximum',         operation="'MAXIMUM'",      value2=None),
+            Function(ret_socket='value', fname='max',             operation="'MAXIMUM'",      value2=None),
+            Function(ret_socket='value', fname='math_less_than',    operation="'LESS_THAN'",    arg_rename={'value0': 'value', 'value1': 'threshold'}, value2=None),
+            Function(ret_socket='value', fname='math_greater_than', operation="'GREATER_THAN'", arg_rename={'value0': 'value', 'value1': 'threshold'}, value2=None),
+            Function(ret_socket='value', fname='sign',            operation="'SIGN'",         arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='math_compare',    operation="'COMPARE'",      arg_rename={'value2': 'epsilon'}),
+            Function(ret_socket='value', fname='smooth_minimum',  operation="'SMOOTH_MIN'",   arg_rename={'value2': 'distance'}),
+            Function(ret_socket='value', fname='smooth_maximum',  operation="'SMOOTH_MAX'",   arg_rename={'value2': 'distance'}),
+            
+            Function(ret_socket='value', fname='math_round',      operation="'ROUND'",        arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='math_floor',      operation="'FLOOR'",        arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='math_ceil',       operation="'CEIL'",         arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='math_truncate',   operation="'TRUNC'",        arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='math_trun',       operation="'TRUNC'",        arg_rename={'value0': 'value'}, value1=None, value2=None),
+            
+            Function(ret_socket='value', fname='fraction',        operation="'FRACT'",        arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='modulo',          operation="'MODULO'",       value2=None),
+
+            Function(ret_socket='value', fname='wrap',            operation="'WRAP'",         arg_rename={'value0': 'value', 'value1': 'max', 'value2': 'min'}),
+            Function(ret_socket='value', fname='snap',            operation="'SNAP'",         arg_rename={'value0': 'value', 'value1': 'increment'}, value2=None),
+            Function(ret_socket='value', fname='ping_pong',       operation="'PINGPONG'",     arg_rename={'value0': 'value', 'value1': 'scale'}, value2=None),
+
+            Function(ret_socket='value', fname='sine',            operation="'SINE'",         arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='sin',             operation="'SINE'",         arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='cosine',          operation="'COSINE'",       arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='cos',             operation="'COSINE'",       arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='tangent',         operation="'TANGENT'",      arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='tan',             operation="'TANGENT'",      arg_rename={'value0': 'value'}, value1=None, value2=None),
+
+            Function(ret_socket='value', fname='arcsine',         operation="'ARCSINE'",      arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='arcsin',          operation="'ARCSINE'",      arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='arccosine',       operation="'ARCCOSINE'",    arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='arccos',          operation="'ARCCOSINE'",    arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='arctangent',      operation="'ARCTANGENT'",   arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='arctan',          operation="'ARCTANGENT'",   arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='arctan2',         operation="'ARCTAN2'",      value2=None),
+            
+            Function(ret_socket='value', fname='sinh',            operation="'SINH'",         arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='cosh',            operation="'COSH'",         arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='tanh',            operation="'TANH'",         arg_rename={'value0': 'value'}, value1=None, value2=None),
+            
+            Function(ret_socket='value', fname='to_radians',      operation="'RADIANS'",      arg_rename={'value0': 'value'}, value1=None, value2=None),
+            Function(ret_socket='value', fname='to_degrees',      operation="'DEGREES'",      arg_rename={'value0': 'value'}, value1=None, value2=None),
+            ],            
+        
+        ('Integer', 'Float') : [
+            Method(ret_socket='value', fname='add',             operation="'ADD'",          value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='subtract',        operation="'SUBTRACT'",     value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='sub',             operation="'SUBTRACT'",     value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='multiply',        operation="'MULTIPLY'",     value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='mul',             operation="'MULTIPLY'",     value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='divide',          operation="'DIVIDE'",       value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='div',             operation="'DIVIDE'",       value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='multiply_add',    operation="'MULTIPLY_ADD'", value0='self', arg_rename={'value1': 'multiplier', 'value2': 'addend'}),
+            Method(ret_socket='value', fname='mul_add',         operation="'MULTIPLY_ADD'", value0='self', arg_rename={'value1': 'multiplier', 'value2': 'addend'}),
+
+            Method(ret_socket='value', fname='power',           operation="'POWER'",        value0='self', arg_rename={'value1': 'exponent'}, value2=None),
+            Method(ret_socket='value', fname='logarithm',       operation="'LOGARITHM'",    value0='self', arg_rename={'value1': 'base'}, value2=None),
+            Method(ret_socket='value', fname='log',             operation="'LOGARITHM'",    value0='self', arg_rename={'value1': 'base'}, value2=None),
+            Method(ret_socket='value', fname='sqrt',            operation="'SQRT'",         value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='inverse_sqrt',    operation="'INVERSE_SQRT'", value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='absolute',        operation="'ABSOLUTE'",     value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='abs',             operation="'ABSOLUTE'",     value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='exponent',        operation="'EXPONENT'",     value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='exp',             operation="'EXPONENT'",     value0='self', value1=None, value2=None),
+
+            Method(ret_socket='value', fname='minimum',         operation="'MINIMUM'",      value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='min',             operation="'MINIMUM'",      value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='maximum',         operation="'MAXIMUM'",      value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='max',             operation="'MAXIMUM'",      value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='math_less_than',    operation="'LESS_THAN'",    value0='self', arg_rename={'value1': 'threshold'}, value2=None),
+            Method(ret_socket='value', fname='math_greater_than', operation="'GREATER_THAN'", value0='self', arg_rename={'value1': 'threshold'}, value2=None),
+            Method(ret_socket='value', fname='sign',            operation="'SIGN'",         value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='math_compare',    operation="'COMPARE'",      value0='self', arg_rename={'value1': 'value', 'value2': 'epsilon'}),
+            Method(ret_socket='value', fname='smooth_minimum',  operation="'SMOOTH_MIN'",   value0='self', arg_rename={'value1': 'value', 'value2': 'distance'}),
+            Method(ret_socket='value', fname='smooth_maximum',  operation="'SMOOTH_MAX'",   value0='self', arg_rename={'value1': 'value', 'value2': 'distance'}),
+            
+            Method(ret_socket='value', fname='math_round',      operation="'ROUND'",        value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='math_floor',      operation="'FLOOR'",        value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='math_ceil',       operation="'CEIL'",         value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='math_truncate',   operation="'TRUNC'",        value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='math_trunc',      operation="'TRUNC'",        value0='self', value1=None, value2=None),
+            
+            Method(ret_socket='value', fname='fraction',        operation="'FRACT'",        value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='fact',            operation="'FRACT'",        value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='modulo',          operation="'MODULO'",       value0='self', arg_rename={'value1': 'value'}, value2=None),
+
+            Method(ret_socket='value', fname='wrap',            operation="'WRAP'",         value0='self', arg_rename={'value1': 'max', 'value2': 'min'}),
+            Method(ret_socket='value', fname='snap',            operation="'SNAP'",         value0='self', arg_rename={'value1': 'increment'}, value2=None),
+            Method(ret_socket='value', fname='ping_pong',       operation="'PINGPONG'",     value0='self', arg_rename={'value1': 'scale'}, value2=None),
+
+            Method(ret_socket='value', fname='sine',            operation="'SINE'",         value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='sin',             operation="'SINE'",         value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='cosine',          operation="'COSINE'",       value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='cos',             operation="'COSINE'",       value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='tangent',         operation="'TANGENT'",      value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='tan',             operation="'TANGENT'",      value0='self', arg_rename={'value1': 'value'}, value2=None),
+
+            Method(ret_socket='value', fname='arcsine',         operation="'ARCSINE'",      value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='arcsin',          operation="'ARCSINE'",      value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='arccosine',       operation="'ARCCOSINE'",    value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='arccos',          operation="'ARCCOSINE'",    value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='arctangent',      operation="'ARCTANGENT'",   value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='arctan',          operation="'ARCTANGENT'",   value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='arctan2',         operation="'ARCTAN2'",      value0='self', value2=None),
+            
+            Method(ret_socket='value', fname='sinh',            operation="'SINH'",         value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='cosh',            operation="'COSH'",         value0='self', arg_rename={'value1': 'value'}, value2=None),
+            Method(ret_socket='value', fname='tanh',            operation="'TANH'",         value0='self', arg_rename={'value1': 'value'}, value2=None),
+            
+            Method(ret_socket='value', fname='to_radians',      operation="'RADIANS'",      value0='self', value1=None, value2=None),
+            Method(ret_socket='value', fname='to_degrees',      operation="'DEGREES'",      value0='self', value1=None, value2=None),
+            ],
     },
     'FunctionNodeRandomValue': {
+        'function': [
+            Function(ret_socket='value', fname='random_float',   data_type="'FLOAT'",        probability=None),
+            Function(ret_socket='value', fname='random_integer', data_type="'INT'",          probability=None),
+            Function(ret_socket='value', fname='random_vector',  data_type="'FLOAT_VECTOR'", probability=None),
+            Function(ret_socket='value', fname='random_boolean', data_type="'BOOLEAN'",      min=None, max=None),
+            ],
+        'Geometry': [
+            Attribute(ret_socket='value', fname='random_float',   data_type="'FLOAT'",        probability=None),
+            Attribute(ret_socket='value', fname='random_integer', data_type="'INT'",          probability=None),
+            Attribute(ret_socket='value', fname='random_vector',  data_type="'FLOAT_VECTOR'", probability=None),
+            Attribute(ret_socket='value', fname='random_boolean', data_type="'BOOLEAN'",      min=None, max=None),
+            ],
+        'Domain': [
+            DomAttribute(ret_socket='value', fname='random_float',   data_type="'FLOAT'",        probability=None),
+            DomAttribute(ret_socket='value', fname='random_integer', data_type="'INT'",          probability=None),
+            DomAttribute(ret_socket='value', fname='random_vector',  data_type="'FLOAT_VECTOR'", probability=None),
+            DomAttribute(ret_socket='value', fname='random_boolean', data_type="'BOOLEAN'",      min=None, max=None),
+            ],
+        
     },
     'FunctionNodeRotateEuler': {
+        'function': [
+            Function(fname='rotate_euler',      ret_socket='rotation', type='EULER', axis=None, angle=None),
+            Function(fname='rotate_axis_angle', ret_socket='rotation', type='AXIS_ANGLE', rotate_by=None),
+            ],
+        'Rotation': [
+            Constructor(fname='Euler',     ret_socket='rotation', type='EULER',      axis=None, angle=None),
+            Constructor(fname='AxisAngle', ret_socket='rotation', type='AXIS_ANGLE', rotate_by=None),
+            Method(fname='rotate_euler',      ret_socket='rotation', rotation='self', type='EULER', axis=None, angle=None),
+            Method(fname='rotate_axis_angle', ret_socket='rotation', rotation='self', type='AXIS_ANGLE', rotate_by=None),
+            ],
     },
     'GeometryNodeSwitch': {
-    },
-    'GeometryNodeFieldOnDomain': {
+        'function': [
+            Function(ret_socket='output'),
+            Function(ret_socket='output', fname='switch_float',      input_type="'FLOAT'"),
+            Function(ret_socket='output', fname='switch_integer',    input_type="'INT'"),
+            Function(ret_socket='output', fname='switch_boolean',    input_type="'BOOLEAN'"),
+            Function(ret_socket='output', fname='switch_vector',     input_type="'VECTOR'"),
+            Function(ret_socket='output', fname='switch_string',     input_type="'STRING'"),
+            Function(ret_socket='output', fname='switch_color',      input_type="'RGBA'"),
+            Function(ret_socket='output', fname='switch_object',     input_type="'OBJECT'"),
+            Function(ret_socket='output', fname='switch_image',      input_type="'IMAGE'"),
+            Function(ret_socket='output', fname='switch_geometry',   input_type="'GEOMETRY'"),
+            Function(ret_socket='output', fname='switch_collection', input_type="'COLLECTION'"),
+            Function(ret_socket='output', fname='switch_texture',    input_type="'TEXTURE'"),
+            Function(ret_socket='output', fname='switch_material',   input_type="'MATERIAL'"),
+            ],
+        'Float':      Method(false='self', ret_socket='output', input_type="'FLOAT'"),
+        'Integer':    Method(false='self', ret_socket='output', input_type="'INT'"),
+        'Boolean':    Method(false='self', ret_socket='output', input_type="'BOOLEAN'"),
+        'Vector':     Method(false='self', ret_socket='output', input_type="'VECTOR'"),
+        'String':     Method(false='self', ret_socket='output', input_type="'STRING'"),
+        'Color':      Method(false='self', ret_socket='output', input_type="'RGBA'"),
+        'Object':     Method(false='self', ret_socket='output', input_type="'OBJECT'"),
+        'Image':      Method(false='self', ret_socket='output', input_type="'IMAGE'"),
+        'Geometry':   Method(false='self', ret_socket='output', input_type="'GEOMETRY'"),
+        'Collection': Method(false='self', ret_socket='output', input_type="'COLLECTION'"),
+        'Texture':    Method(false='self', ret_socket='output', input_type="'TEXTURE'"),
+        'Material':   Method(false='self', ret_socket='output', input_type="'MATERIAL'"),
     },
 }
+
+UV= {
+    'GeometryNodeUVPackIslands': {
+        'Mesh': Attribute(ret_socket='uv'),
+        'Face': DomAttribute(ret_socket='uv'),
+    },
+    'GeometryNodeUVUnwrap': {
+        'Mesh': Attribute(ret_socket='uv'),
+        'Face': DomAttribute(ret_socket='uv'),
+    },
+}
+
+VECTOR = {
+    'ShaderNodeCombineXYZ': {
+        'Vector': Constructor(fname='Combine', ret_socket='vector'),
+    },
+    'ShaderNodeSeparateXYZ': {
+        'Vector': [
+            Method(fname='separate', cache=True, vector='self'),
+            Property(fname='x', cache=True, vector='self', ret_socket='x'),
+            Property(fname='y', cache=True, vector='self', ret_socket='y'),
+            Property(fname='z', cache=True, vector='self', ret_socket='z'),
+            ],
+    },
+    'ShaderNodeVectorCurve': {
+        'Vector': Method(fname='curves', ret_socket='vector', vector='self'),
+    },
+    'ShaderNodeVectorMath': {
+        'Vector': [
+            Method(ret_socket='vector', fname='add',             operation="'ADD'",           vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='subtract',        operation="'SUBTRACT'",      vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='sub',             operation="'SUBTRACT'",      vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='multiply',        operation="'MULTIPLY'",      vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='mul',             operation="'MULTIPLY'",      vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='divide',          operation="'DIVIDE'",        vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='div',             operation="'DIVIDE'",        vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='multiply_add',    operation="'MULTIPLY_ADD'",  vector0='self', arg_rename={'vector1': 'multiplier', 'vector2':'addend'}, scale=None),
+            Method(ret_socket='vector', fname='mul_add',         operation="'MULTIPLY_ADD'",  vector0='self', arg_rename={'vector1': 'multiplier', 'vector2':'addend'}, scale=None),
+
+            Method(ret_socket='vector', fname='cross_product',   operation="'CROSS_PRODUCT'", vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='cross',           operation="'CROSS_PRODUCT'", vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='project',         operation="'PROJECT'",       vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='reflect',         operation="'REFLECT'",       vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='refract',         operation="'REFRACT'",       vector0='self', arg_rename={'vector1': 'vector', 'scale':'ior'}, vector2=None),
+            Method(ret_socket='vector', fname='face_forward',    operation="'FACEFORWARD'",   vector0='self', arg_rename={'vector1': 'incident', 'vector2':'reference'}, scale=None),
+            Method(ret_socket='value',  fname='dot_product',     operation="'DOT_PRODUCT'",   vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='value',  fname='dot',             operation="'DOT_PRODUCT'",   vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            
+            Method(ret_socket='value',  fname='distance',        operation="'DISTANCE'",      vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Property(ret_socket='value',  fname='length',        operation="'LENGTH'",        vector0='self', vector1=None, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='scale',           operation="'SCALE'",         vector0='self', vector1=None, vector2=None),
+            
+            Method(ret_socket='vector', fname='normalize',       operation="'NORMALIZE'",     vector0='self', vector1=None, vector2=None, scale=None),
+            
+            Method(ret_socket='vector', fname='absolute',        operation="'ABSOLUTE'",      vector0='self', vector1=None, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='abs',             operation="'ABSOLUTE'",      vector0='self', vector1=None, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='minimum',         operation="'MINIMUM'",       vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='min',             operation="'MINIMUM'",       vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='maximum',         operation="'MAXIMUM'",       vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='max',             operation="'MAXIMUM'",       vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='floor',           operation="'FLOOR'",         vector0='self', vector1=None, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='ceil',            operation="'CEIL'",          vector0='self', vector1=None, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='fraction',        operation="'FRACTION'",      vector0='self', vector1=None, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='fract',           operation="'FRACTION'",      vector0='self', vector1=None, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='modulo',          operation="'MODULO'",        vector0='self', arg_rename={'vector1': 'vector'}, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='wrap',            operation="'WRAP'",          vector0='self', arg_rename={'vector1': 'max', 'vector2':'min'}, scale=None),
+            Method(ret_socket='vector', fname='snap',            operation="'SNAP'",          vector0='self', arg_rename={'vector1': 'increment'}, vector2=None, scale=None),
+            
+            Method(ret_socket='vector', fname='sine',            operation="'SINE'",          vector0='self', vector1=None, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='sin',             operation="'SINE'",          vector0='self', vector1=None, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='cosine',          operation="'COSINE'",        vector0='self', vector1=None, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='cos',             operation="'COSINE'",        vector0='self', vector1=None, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='tangent',         operation="'TANGENT'",       vector0='self', vector1=None, vector2=None, scale=None),
+            Method(ret_socket='vector', fname='tan',             operation="'TANGENT'",       vector0='self', vector1=None, vector2=None, scale=None),            
+            ],
+    },
+    'ShaderNodeVectorRotate': {
+        'Vector' : [
+            #rotation_type (str): 'AXIS_ANGLE' in [AXIS_ANGLE, X_AXIS, Y_AXIS, Z_AXIS, EULER_XYZ]
+            Method(ret_socket='vector', vector='self', fname='rotate_euler',     rotation_type= "'EULER_XYZ'",  axis=None, angle=None),
+            Method(ret_socket='vector', vector='self', fname='rotate_axis_angle', rotation_type="'AXIS_ANGLE'", rotation=None),
+            Method(ret_socket='vector', vector='self', fname='rotate_x',          rotation_type="'X_AXIS'",     rotation=None, axis=None),
+            Method(ret_socket='vector', vector='self', fname='rotate_y',          rotation_type="'Y_AXIS'",     rotation=None, axis=None),
+            Method(ret_socket='vector', vector='self', fname='rotate_z',          rotation_type="'Z_AXIS'",     rotation=None, axis=None),
+            ],
+    },
+}
+
+VOLUME = {
+    'GeometryNodeVolumeCube': {
+        'Volume': Constructor(fname='Cube', ret_socket='volume'),
+    },    
+    'GeometryNodeVolumeToMesh': {
+        'Volume': Method(volume='self', fname='to_mesh', ret_socket='mesh', ret_class='Mesh'),
+    },
+}
+
+
+
 
 
 # ----------------------------------------------------------------------------------------------------
@@ -1692,6 +2017,9 @@ for mode in ('MIX', 'DARKEN', 'MULTIPLY', 'BURN', 'LIGHTEN', 'SCREEN', 'DODGE', 
     
 COLOR['ShaderNodeMix']['function'].extend(mix_functions)
 COLOR['ShaderNodeMix']['Color'].extend(mix_methods)
+
+
+
 
 
 
