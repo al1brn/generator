@@ -223,7 +223,7 @@ class Generator:
                     if not ok_arg:
                         yield self.indent(1) + f"Args:\n"
                         ok_arg = True
-                    yield self.indent(2) + f"{arg.scomment}\n"
+                    yield self.indent(2) + f"{arg.scomment(**self.kwargs)}\n"
     
             if ok_arg:
                 yield "\n"
@@ -462,6 +462,9 @@ class ClassGenerator(dict):
         super().__init__()
         self.wnodes = wnodes
         
+    # ----------------------------------------------------------------------------------------------------
+    # Add a dictionary of generators
+        
     def add_generators(self, gens):
         
         for blid, classes in gens.items():
@@ -493,19 +496,14 @@ class ClassGenerator(dict):
                     else:
                         self[class_name][blid].append(generators)
                         
-                        
-                    
-    def gen_class(self, class_name, no_setter=False):
-        
-        if class_name != 'function':
-            if class_name not in CLASSES:
-                raise Exception(f"{class_name} not in CLASSES!")
-            root = CLASSES[class_name][1]
-            if root != "":
-                root = f"({root})"
-            yield f"class {class_name}{root}:\n"
-        
-        # ----- Sort the methods
+    # ----------------------------------------------------------------------------------------------------
+    # Mehods of a class
+    # Returns sorted array of triplets:
+    # - methode name
+    # - generator
+    # - wnode
+    
+    def class_methods(self, class_name):
         
         methods = []
         for blid, gens in self[class_name].items():
@@ -513,27 +511,71 @@ class ClassGenerator(dict):
             for gen in gens:
                 fname = gen.fname(wnode)
                 if gen.decorator == 'setter':
-                    if no_setter:
-                        continue
                     fname += " setter"
                 
                 methods.append((fname, gen, wnode))
                 
-        methods = sorted(methods, key=lambda a: a[0])
+        return sorted(methods, key=lambda a: a[0])
+    
+    # ----------------------------------------------------------------------------------------------------
+    # Generate the functions to import in __init__
+                        
+    def gen_classes_import(self):
+
+        # ----- Data classes
+        
+        for class_name in sorted(self.keys()):
+            if class_name != 'function':
+                yield f"from geonodes.nodes.classes import {class_name}\n"
+                
+        yield "\n"
+        
+        # ----- Global functions
+        
+        methods = self.class_methods('function')
+        
+        s = None
+        for f, _, _ in methods:
+            if s is None:
+                s = f"from geonodes.nodes.classes import {f}"
+            else:
+                s += f", {f}"
+            if len(s) > 140:
+                yield s + "\n"
+                s = None
+        
+        if s is not None:
+            yield s + "\n"
+            
+        yield "\n"
+        
+    # ----------------------------------------------------------------------------------------------------
+    # Generate a class
+                    
+    def gen_class(self, class_name):
+        
+        if class_name != 'function':
+            if class_name not in CLASSES:
+                raise Exception(f"{class_name} not in CLASSES!")
+                
+            root = CLASSES[class_name][1]
+            if root != "":
+                root = f"({root})"
+            yield f"class {class_name}{root}:\n"
+        
+        # ----- Mehods
+        
+        methods = self.class_methods(class_name)
+        
+        # ----- Generate the methods
         
         for _, gen, wnode in methods:
             for line in gen.gen_source(wnode):
                 yield line
             yield "\n"
             
-        """
-        for blid, codes in self[class_name].items():
-            wnode = self.wnodes.get(blid)
-            for code in codes:
-                for line in code.gen_source(wnode):
-                    yield line
-                yield "\n"
-        """
+    # ----------------------------------------------------------------------------------------------------
+    # Create one file per class
                 
     def create_files(self, fpath, select=None):
         
@@ -543,9 +585,11 @@ class ClassGenerator(dict):
                     for line in self.gen_class(class_name):
                         f.write(line)
                     f.write("\n\n")
+                    
+    # ----------------------------------------------------------------------------------------------------
+    # Create one big file with all classes
         
-    def create_one_file(self, file_name, no_setter=False, select=None):
-        
+    def create_one_file(self, file_name, select=None):
         
         with open(file_name, 'w') as f:
             
@@ -553,11 +597,44 @@ class ClassGenerator(dict):
             f.write("import geonodes.core.domain as geodom\n")
             f.write("\n")
             
+            if False:
+                f.write("# Imports to copy in __init__.py\n")
+                f.write('"""\n')
+
+                for line in self.gen_classes_import():
+                    f.write(line)
+                f.write('"""\n')
+            
             for class_name in self.keys():
                 if select is None or class_name in select:
-                    for line in self.gen_class(class_name, no_setter=no_setter):
+                    for line in self.gen_class(class_name):
                         f.write(line)
                     f.write("\n\n")
+                    
+    # ----------------------------------------------------------------------------------------------------
+    # Create the __init__.py file
+    
+    def create_init_file(self, file_name, version):
+        
+        with open(file_name, 'w') as f:
+            
+            import bpy
+            
+            f.write("# geonodes init file\n\n")
+            
+            f.write(f"version = {version}\n")
+            f.write(f"blender_version={bpy.app.version}\n\n")
+            
+            f.write("pi = 3.141592653589793\n\n")
+            
+            f.write("from geonodes.core.node import Node, GroupInput, GroupOutput, Frame, Viewer, SceneTime\n")
+            f.write("from geonodes.core.tree import Tree, Groups\n\n")
+            
+            for line in self.gen_classes_import():
+                f.write(line)
+                
+            f.write("\n")
+                    
         
         
         
@@ -631,35 +708,65 @@ COLOR = {
     'FunctionNodeCombineColor': {
         'function': [
             Function(fname='combine_rgb', ret_socket='color', mode="'RGB'"),
-            Source(
-                header="def combine_hsv(hue=None, saturation=None, value=None, alpha=None):",
-                body  ="return nodes.CombineColor(red=hue, green=saturation, blue=value, alpha=alpha, mode='HSV').color",
-                indent=""),
-            Source(
-                header="def combine_hsl(hue=None, saturation=None, lightness=None, alpha=None):",
-                body  ="return nodes.CombineColor(red=hue, green=saturation, blue=lightness, alpha=alpha, mode='HSL').color",
-                indent=""),
+            Function(fname='combine_hsv', ret_socket='color', mode="'HSV'", arg_rename={'red': 'hue', 'green': 'saturation', 'blue': 'value'}),
+            Function(fname='combine_hsl', ret_socket='color', mode="'HSL'", arg_rename={'red': 'hue', 'green': 'saturation', 'blue': 'lightness'}),
             ],
         'Color': [
             Constructor(fname='RGB', ret_socket='color', mode="'RGB'"),
-            Constructor(
-                header="def HSV(cls, hue=None, saturation=None, valye=None, alpha=None):",
-                body  ="return cls(nodes.CombineColor(red=hue, green=saturation, blue=value, alpha=alpha, mode='HSL').color)",
-                        ),
-            Constructor(
-                header="def HSL(cls, hue=None, saturation=None, lightness=None, alpha=None):",
-                body  ="return cls(nodes.CombineColor(red=hue, green=saturation, blue=lightness, alpha=alpha, mode='HSL').color)",
-                        ),
+            Constructor(fname='HSV', ret_socket='color', mode="'HSV'", arg_rename={'red': 'hue', 'green': 'saturation', 'blue': 'value'}),
+            Constructor(fname='HSL', ret_socket='color', mode="'HSV'", arg_rename={'red': 'hue', 'green': 'saturation', 'blue': 'lightness'}),
             ]
     },
     'ShaderNodeMix': {
         'function': [
             Function(fname='float_mix', ret_socket='result', data_type="'FLOAT'", blend_type='MIX', clamp_result=False, factor_mode="'UNIFORM'"),
             Function(fname='vector_mix', ret_socket='result', data_type="'VECTOR'", blend_type='MIX', clamp_result=False),
+            
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_mix',              ),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_darken',       blend_type="'DARKEN'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_multiply',     blend_type="'MULTIPLY'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_burn',         blend_type="'BURN'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_lighten',      blend_type="'LIGHTEN'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_screen',       blend_type="'SCREEN'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_dodge',        blend_type="'DODGE'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_add',          blend_type="'ADD'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_overlay',      blend_type="'OVERLAY'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_soft_light',   blend_type="'SOFT_LIGHT'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_linear_light', blend_type="'LINEAR_LIGHT'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_difference',   blend_type="'DIFFERENCE'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_subtract',     blend_type="'SUBTRACT'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_divide',       blend_type="'DIVIDE'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_hue',          blend_type="'HUE'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_saturation',   blend_type="'SATURATION'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_color',        blend_type="'COLOR'"),
+            Function(ret_socket='result', data_type="'COLOR'", factor_mode="'UNIFORM'", fname='color_value',        blend_type="'VALUE'"),
             ],
-        'Color': [Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'"),],
-        'Float': Method(ret_socket='result', a='self', data_type="'FLOAT'", blend_type='MIX', clamp_result=False, factor_mode="'UNIFORM'"),
-        'Vector': Method(ret_socket='result', a='self', data_type="'VECTOR'", blend_type='MIX', clamp_result=False),
+        'Color': [
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix',              ),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_darken',       blend_type="'DARKEN'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_multiply',     blend_type="'MULTIPLY'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_burn',         blend_type="'BURN'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_lighten',      blend_type="'LIGHTEN'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_screen',       blend_type="'SCREEN'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_dodge',        blend_type="'DODGE'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_add',          blend_type="'ADD'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_overlay',      blend_type="'OVERLAY'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_soft_light',   blend_type="'SOFT_LIGHT'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_linear_light', blend_type="'LINEAR_LIGHT'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_difference',   blend_type="'DIFFERENCE'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_subtract',     blend_type="'SUBTRACT'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_divide',       blend_type="'DIVIDE'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_hue',          blend_type="'HUE'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_saturation',   blend_type="'SATURATION'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_color',        blend_type="'COLOR'"),
+            Method(ret_socket='result', a='self', data_type="'COLOR'", factor_mode="'UNIFORM'", arg_rename={'b':'color'}, fname='mix_value',        blend_type="'VALUE'"),
+            ],
+        'Float': Method(ret_socket='result', a='self', data_type="'FLOAT'", blend_type='MIX', arg_rename={'b': 'value'}, clamp_result=False, factor_mode="'UNIFORM'"),
+        'Vector': [
+            Method(ret_socket='result', a='self', data_type="'VECTOR'", blend_type='MIX', arg_rename={'b': 'vector'}, clamp_result=False),
+            Method(ret_socket='result', a='self', data_type="'VECTOR'", blend_type='MIX', arg_rename={'b': 'vector'}, clamp_result=False, fname='mix_uniform', factor_mode="'UNIFORM'", factor=None),
+            Method(ret_socket='result', a='self', data_type="'VECTOR'", blend_type='MIX', arg_rename={'b': 'vector'}, clamp_result=False, fname='mix_non_uniform', factor_mode="'NON_UNIFORM'"),
+            ]
     },
     'ShaderNodeRGBCurve': {
         'function': Function(),
@@ -738,8 +845,8 @@ CURVE1 = {
     'GeometryNodeTrimCurve': {
         'Curve':  [
             StackMethod(fname='trim', header="def trim(self, start=None, end=None, mode='FACTOR'):", curve='self', start0='start', end0='start', start1='start', end1='end'),
-            Source(header="def trim_factor(self, start=None, end=None):", body="return self.trim(start=start, end=end, mode='FACTOR')"),
-            Source(header="def trim_length(self, start=None, end=None):", body="return self.trim(start=start, end=end, mode='LENGTH')"),
+            StackMethod(fname='trim_factor', curve='self', arg_rename={'start0': 'start', 'end0': 'end'}, start1=None, end1=None),
+            StackMethod(fname='trim_length', curve='self', arg_rename={'start1': 'start', 'end1': 'end'}, start0=None, end0=None),
             ],
     },
 }
@@ -1985,38 +2092,60 @@ VOLUME = {
 }
 
 
-
-
-
 # ----------------------------------------------------------------------------------------------------
-# Mix color functions and methods
+# All the generators
 
-mix_functions = []
-mix_methods   = []
-for mode in ('MIX', 'DARKEN', 'MULTIPLY', 'BURN', 'LIGHTEN', 'SCREEN', 'DODGE', 'ADD', 'OVERLAY', 'SOFT_LIGHT', 'LINEAR_LIGHT', 'DIFFERENCE', 'SUBTRACT', 'DIVIDE', 'HUE', 'SATURATION', 'COLOR', 'VALUE'):
+ALL = {
+       **ATTRIBUTE, 
+       **COLOR, 
+       **CURVE1, 
+       **CURVE2, 
+       **CURVE_PRIMITIVES, 
+       **CURVE_TOPOLOGY, 
+       **GEOMETRY,
+       **INPUT,
+       **INSTANCES,
+       **MATERIAL,
+       **MESH,
+       **MESH_PRIMITIVES,
+       #**MESH_TOPOLOGY,
+       **POINT,
+       **STRING,
+       **TEXTURE,
+       **UTILITIES,
+       **UV,
+       **VECTOR,
+       **VOLUME,
+       }
 
-    fname = f"mix_{mode.lower()}"
+def get_class_generators(wnodes):
+    cg = ClassGenerator(wnodes)
+    cg.add_generators(ALL)
     
-    # ----- Color
-
-    mix_methods.append(
-        Method(fname=fname, ret_socket='result', a='self', blend_type=f"'{mode}'", data_type="'COLOR'", factor_mode="'UNIFORM'")
-        )
+    return cg
     
-    # ----- Function
-    # - mix_mix --> replaced par mix with blend_type accesible
-
-    if fname == 'mix_mix':
-        mix_functions.append(
-            Function(fname='mix', ret_socket="result", data_type="'COLOR'", factor_mode="'UNIFORM'")
-            )
-    else:
-        mix_functions.append(
-            Function(fname=fname, ret_socket="result", blend_type=f"'{mode}'", data_type="'COLOR'", factor_mode="'UNIFORM'")
-            )
+    cg.add_generators(ATTRIBUTE)
+    cg.add_generators(COLOR)
+    cg.add_generators(CURVE1)
+    cg.add_generators(CURVE2)
+    cg.add_generators(CURVE_PRIMITIVES)
+    cg.add_generators(CURVE_TOPOLOGY)
+    cg.add_generators(GEOMETRY)
+    cg.add_generators(INPUT)
+    cg.add_generators(INSTANCES)
+    cg.add_generators(MATERIAL)
+    cg.add_generators(MESH)
+    cg.add_generators(MESH_PRIMITIVES)
+    cg.add_generators(POINT)
+    cg.add_generators(STRING)
+    cg.add_generators(TEXTURE)
+    cg.add_generators(UTILITIES)
+    cg.add_generators(UV)
+    cg.add_generators(VECTOR)
+    cg.add_generators(VOLUME)
     
-COLOR['ShaderNodeMix']['function'].extend(mix_functions)
-COLOR['ShaderNodeMix']['Color'].extend(mix_methods)
+    return cg
+
 
 
 

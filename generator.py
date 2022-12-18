@@ -220,6 +220,8 @@ from generator import gen_sockets as gsock
 from generator.documentation import Doc, Section, Text
 from generator.pyparser import Parser
 
+from generator import code_gen
+
 import importlib
 importlib.reload(gsock)
 
@@ -688,8 +690,9 @@ class Argument:
             raise RuntimeError(f"Unkwnon argument type: {self.arg_type}")
 
         
-    @property
-    def scomment(self):
+    def scomment(self, **kwargs):
+        
+        _, arg_rename = Arguments.extract_arg_rename(**kwargs)
         
         if self.arg_type == 'CLS':
             return ""
@@ -710,6 +713,9 @@ class Argument:
                     return self.header_str.replace('=', ':')
             
         s = f"{self.name}"
+        if s in arg_rename:
+            s = arg_rename[s]
+            
         if self.is_socket:
             s += ": "
             if self.is_multi:
@@ -861,7 +867,7 @@ class Arguments(list):
                 continue
                 
             else:
-                s = arg.scomment
+                s = arg.scomment()
                 if s == "":
                     continue
                 
@@ -893,6 +899,22 @@ class Arguments(list):
     # keys of kwargs represent argument with a initial value different from default
     # In the case the argument is not put in the list
     
+    @staticmethod
+    def extract_arg_rename(**kwargs):
+
+        fixed_args = {**kwargs}
+        if 'arg_rename' in fixed_args:
+            arg_rename = {**fixed_args['arg_rename']}
+            del fixed_args['arg_rename']
+            
+        else:
+            arg_rename = {}
+
+        if 'use_clamp' not in arg_rename:
+            arg_rename['use_clamp'] = 'clamp'
+            
+        return fixed_args, arg_rename
+    
     # ----------------------------------------------------------------------------------------------------
     # Method header
     
@@ -902,15 +924,7 @@ class Arguments(list):
         
         # ----- Extract the arg_rename dict
         
-        fixed_args = {**kwargs}
-        if 'arg_rename' in fixed_args:
-            arg_rename = {**fixed_args['arg_rename']}
-            del fixed_args['arg_rename']
-        else:
-            arg_rename = {}
-
-        if 'use_clamp' not in arg_rename:
-            arg_rename['use_clamp'] = 'clamp'
+        fixed_args, arg_rename = self.extract_arg_rename(**kwargs)
             
         # ---------------------------------------------------------------------------
         # We make two passes:
@@ -955,15 +969,7 @@ class Arguments(list):
         
         # ----- Extract the arg_rename dict
         
-        fixed_args = {**kwargs}
-        if 'arg_rename' in fixed_args:
-            arg_rename = {**fixed_args['arg_rename']}
-            del fixed_args['arg_rename']
-        else:
-            arg_rename = {}
-            
-        if 'use_clamp' not in arg_rename:
-            arg_rename['use_clamp'] = 'clamp'
+        fixed_args, arg_rename = self.extract_arg_rename(**kwargs)
             
         # ---------------------------------------------------------------------------
         # We make two passes:
@@ -1683,7 +1689,7 @@ class WNode:
     # ====================================================================================================
     # Generate the node class
     
-    def gen_node_class(self, wrap_parameters=True):
+    def gen_node_class(self, wrap_parameters=True, cl_gen=None):
         
         args = self.get_node_arguments()
         
@@ -1714,6 +1720,39 @@ class WNode:
         else:
             yield _1_ + '"""' + f"Node *{self.bnode.name}*\n"
             yield _1_ + f".. _{self.node_name}:\n"
+            
+            # ---- Classes calling this node
+            
+            if cl_gen is not None:
+                node_ref = cl_gen.get(self.bl_idname)
+                if node_ref is None:
+                    print(f"CAUTION: node {self.bl_idname} not implemented in class generators")
+                    
+                else:
+                    yield _1_ + "Node implementation:"
+                    for class_name, gs in node_ref.items():
+                        if class_name == 'function':
+                            yield _2_ + 'global functions:'
+                        else:
+                            yield _2_ + f"{class_name}:"
+                            
+                        gens = gs if isinstance(gs, list) else [gs]
+                        nref = 0
+                        sref = _3_
+                        for gen in gens:
+                            sref += gen.fname(self) + " "
+                            nref += 1
+                            if nref % 10 == 0:
+                                yield sref
+                                nref = 0
+                                sref = _3_
+                        if nref > 0:
+                            yield sref
+
+                    yield "\n"
+            
+            # ----- Arguments
+            
             yield _1_ + "Args:"
             
             for uname, wsock in self.inputs.unames.items():
@@ -2038,8 +2077,9 @@ from geonodes.core.node import Node
             
             f.write(f"\n# {'-'*100}\n")
             f.write(f"# Node {wn.node_name} for {wn.bl_idname}\n")
+            
 
-            for line in wn.gen_node_class():
+            for line in wn.gen_node_class(cl_gen=code_gen.ALL):
                 f.write(line)
                 
             # ----- The documentation
