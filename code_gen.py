@@ -11,46 +11,48 @@ Created on Tue Dec 13 17:41:59 2022
 
 CLASSES = {
     
+    'function'      : ('functions', None),
+    
     # Geometry
 
-    'Geometry'      : ('data', 'geosocks.Geometry'),
+    'Geometry'      : ('classes', 'geosocks.Geometry'),
 
-    'Mesh'          : ('data', 'Geometry'),
-    'Curve'         : ('data', 'Geometry'),
-    'Points'        : ('data', 'Geometry'),
-    'Instances'     : ('data', 'Geometry'),
-    'Volume'        : ('data', 'Geometry'),
+    'Mesh'          : ('classes', 'Geometry'),
+    'Curve'         : ('classes', 'Geometry'),
+    'Points'        : ('classes', 'Geometry'),
+    'Instances'     : ('classes', 'Geometry'),
+    'Volume'        : ('classes', 'Geometry'),
     
     # Base
 
-    'Boolean'       : ('data', 'geosocks.Boolean'),
-    'Integer'       : ('data', 'geosocks.Integer'),
-    'Float'         : ('data', 'geosocks.Float'),
-    'Vector'        : ('data', 'geosocks.Vector'),
-    'Color'         : ('data', 'geosocks.Color'),
-    'String'        : ('data', 'geosocks.String'),
-    'Rotation'      : ('data', 'Vector'),
+    'Boolean'       : ('classes', 'geosocks.Boolean'),
+    'Integer'       : ('classes', 'geosocks.Integer'),
+    'Float'         : ('classes', 'geosocks.Float'),
+    'Vector'        : ('classes', 'geosocks.Vector'),
+    'Color'         : ('classes', 'geosocks.Color'),
+    'String'        : ('classes', 'geosocks.String'),
+    'Rotation'      : ('classes', 'Vector'),
     
     # Blender
 
-    'Collection'    : ('data', 'geosocks.DataSocket'),
-    'Object'        : ('data', 'geosocks.DataSocket'),
-    'Material'      : ('data', 'geosocks.DataSocket'),
-    'Texture'       : ('data', 'geosocks.DataSocket'),
-    'Image'         : ('data', 'geosocks.DataSocket'),
+    'Collection'    : ('classes', 'geosocks.Collection'),
+    'Object'        : ('classes', 'geosocks.Object'),
+    'Material'      : ('classes', 'geosocks.Material'),
+    'Texture'       : ('classes', 'geosocks.Texture'),
+    'Image'         : ('classes', 'geosocks.Image'),
     
     # Domains
     
-    'Domain'        : ('domain', 'geodom.Domain'),
+    'Domain'        : ('domains', 'geodom.Domain'),
 
-    'Vertex'        : ('domain', 'Domain'),
-    'Edge'          : ('domain', 'Domain'),
-    'Face'          : ('domain', 'Domain'),
-    'Corner'        : ('domain', 'Domain'),
-    'ControlPoint'  : ('domain', 'Domain'),
-    'Spline'        : ('domain', 'Domain'),
-    'CloudPoint'    : ('domain', 'Domain'),
-    'Instance'      : ('domain', 'Domain'),
+    'Vertex'        : ('domains', 'Domain'),
+    'Edge'          : ('domains', 'Domain'),
+    'Face'          : ('domains', 'Domain'),
+    'Corner'        : ('domains', 'Domain'),
+    'ControlPoint'  : ('domains', 'Domain'),
+    'Spline'        : ('domains', 'Domain'),
+    'CloudPoint'    : ('domains', 'Domain'),
+    'Instance'      : ('domains', 'Domain'),
     }
 
 
@@ -68,10 +70,12 @@ class Generator:
         self.fname_       = None                # function or method name
         self.first_arg    = None                # cls, self or None
         
-        self.node_wrapper = None                # function to call with node as an argument. Used for stack and attribute 
+        self.stack        = False               # call self.stack
+        self.attribute    = False               # call self.attribute
         
         self.header       = None                # replace the header generation by user source code
         self.body         = None                # replace the body generation by user source code
+        self.body_start   = None                # first lines of code
         
         self.ret_socket   = None                # socket to return, returns node if None. Can be a tuple
         self.ret_class    = None                # type of the return socket. Ignore if socket is None. must be a tuple if ret_socket is tuple.
@@ -125,9 +129,6 @@ class Generator:
             if self_key is not None:
                 self.kwargs[self_key] = 'self.data_socket'
                 
-            if self.node_wrapper == 'stack':
-                self.node_wrapper = 'socket_stack'
-                
     # ----------------------------------------------------------------------------------------------------
     # Indentation
         
@@ -154,7 +155,7 @@ class Generator:
     # Generate the source code
         
     def gen_source(self, node):
-
+        
         # ----- Hide data_type if exists
         
         if self.dtype is not None:
@@ -175,7 +176,6 @@ class Generator:
         #
         # @decorator
         # def fname(...):
-
 
         # ----- Decorator
         
@@ -273,6 +273,30 @@ class Generator:
             yield "\n"
 
             return
+
+        # ----- body start
+        
+        if self.body_start is not None:
+            for line in self.body_start.split("\n"):
+                yield self.indent(1) + line + "\n"
+            
+            yield "\n"
+            
+        # ----- Function calls
+        
+        attribute_func = None
+        if self.attribute:
+            if self.is_domain:
+                attribute_func = "attribute_node"
+            else:
+                attribute_func = "as_attribute"
+        
+        stack_func = None
+        if self.stack:
+            if self.is_domain:
+                stack_func = "socket_stack"
+            else:
+                stack_func = "stack"
         
         # ----- data_type
  
@@ -282,20 +306,31 @@ class Generator:
         
         # ----- Node creation string
 
-        s = f"{self.node_call_str(node)}"
-        if self.node_wrapper is not None:
-            s = f"self.{self.node_wrapper}({s})"
+        snode = f"{self.node_call_str(node)}"
+        ssock = None
+        
+        # ----- Attribute
+        # attribute function returns a node
+
+        snode = f"{self.node_call_str(node)}"
+        if attribute_func is not None:
+            snode = f"self.{attribute_func}({snode})"
             
         # ----- Cache mechanism
         # node = ...
             
         if self.cache:
-            fname = self.fname(node)
-            yield self.indent(1) + f"if not hasattr(self, '_c_{fname}'):\n"
-            yield self.indent(2) + f"self._c_{fname} = {s}\n"
-            snode = f"self._c_{fname}"
-        else:
-            snode = s
+            cache_name = node.bl_idname.lower()
+            yield self.indent(1) + f"if not hasattr(self, '_c_{cache_name}'):\n"
+            yield self.indent(2) + f"self._c_{cache_name} = {snode}\n"
+            snode = f"self._c_{cache_name}"
+            
+        # ----- Stack
+        # stack function returns a socket
+            
+        if stack_func is not None:
+            ssock = f"self.{stack_func}({snode})"
+            snode = ssock + ".node"
 
         # ----- Return node, a socket or a tuple of sockets
         
@@ -304,7 +339,7 @@ class Generator:
                 raise Exception(f"Node {node.bl_idname}: '{name}' is not a valid output socket name in {list(node.outputs.unames.keys())}")
         
         if self.ret_socket is None:
-            s = snode
+            sret = snode if ssock is None else ssock
             
         elif isinstance(self.ret_socket, tuple):
             yield self.indent(1) + f"node = {snode}\n"
@@ -317,14 +352,14 @@ class Generator:
                 else:
                     vals.append(f"{rc}(node.{rs})")
                     
-            s = ", ".join(vals)
+            sret = ", ".join(vals)
                 
         else:
             check_output_socket(self.ret_socket)
-            s = f"{snode}.{self.ret_socket}"
+            sret = f"{snode}.{self.ret_socket}"
 
             if self.ret_class is not None:
-                s = f"{self.ret_class}({s})"
+                sret = f"{self.ret_class}({sret})"
                 
         # ----- No return if property setter
         
@@ -335,7 +370,7 @@ class Generator:
             
         # ----- Done
             
-        yield self.indent(1) + f"{return_}{s}\n\n"
+        yield self.indent(1) + f"{return_}{sret}\n\n"
         
 # ----------------------------------------------------------------------------------------------------
 # Method 
@@ -371,8 +406,7 @@ class DomProperty(Property):
 
 class Setter(Method):
     def __init__(self, stack=True, **kwargs):
-        node_wrapper = 'stack' if stack else None
-        super().__init__(decorator="setter", node_wrapper=node_wrapper, **kwargs)
+        super().__init__(decorator="setter", stack=stack, **kwargs)
         self.com_descr = "Node implemented as property setter."
         
         for k, v in self.kwargs.items():
@@ -390,7 +424,7 @@ class DomSetter(Setter):
         
 class StackMethod(Method):
     def __init__(self, **kwargs):
-        super().__init__(node_wrapper='stack', **kwargs)
+        super().__init__(stack=True, **kwargs)
 
 class DomStackMethod(StackMethod):
     def __init__(self, **kwargs):
@@ -401,7 +435,7 @@ class DomStackMethod(StackMethod):
         
 class Attribute(Method):
     def __init__(self, **kwargs):
-        super().__init__(node_wrapper='as_attribute', **kwargs)
+        super().__init__(attribute=True, **kwargs)
         
 class PropAttribute(Attribute):
     def __init__(self, **kwargs):
@@ -409,7 +443,7 @@ class PropAttribute(Attribute):
         
 class DomAttribute(Method):
     def __init__(self, **kwargs):
-        super().__init__(is_domain=True, node_wrapper='attribute_node', **kwargs)
+        super().__init__(is_domain=True, attribute=True, **kwargs)
         
 class DomPropAttribute(DomAttribute):
     def __init__(self, **kwargs):
@@ -446,6 +480,7 @@ class PropReadError(Generator):
     def __init__(self, fname, class_name):
         super().__init__(
                 decorator ="@property",
+                fname     = fname,
                 header    = f"def {fname}(self):",
                 body      = f"raise Exception(\"Error: '{fname}' is a write only property of class {class_name}!\")",
                 com_descr = f"'{fname}' is a write only property.\nRaise an exception if attempt to read.",
@@ -515,6 +550,10 @@ class ClassGenerator(dict):
                 
                 methods.append((fname, gen, wnode))
                 
+        #if class_name == 'Domain':
+        #    print("\n".join([a[0] for a in sorted(methods, key=lambda a: a[0])]))
+                
+                
         return sorted(methods, key=lambda a: a[0])
     
     # ----------------------------------------------------------------------------------------------------
@@ -524,11 +563,12 @@ class ClassGenerator(dict):
 
         # ----- Data classes
         
-        for class_name in sorted(self.keys()):
-            if class_name != 'function':
-                yield f"from geonodes.nodes.classes import {class_name}\n"
-                
-        yield "\n"
+        for class_type in ['domains', 'classes']:
+            for class_name in sorted(self.keys()):
+                if CLASSES[class_name][0] == class_type:
+                    yield f"from geonodes.nodes.{CLASSES[class_name][0]} import {class_name}\n"
+                    
+            yield "\n"
         
         # ----- Global functions
         
@@ -537,7 +577,7 @@ class ClassGenerator(dict):
         s = None
         for f, _, _ in methods:
             if s is None:
-                s = f"from geonodes.nodes.classes import {f}"
+                s = f"from geonodes.nodes.functions import {f}"
             else:
                 s += f", {f}"
             if len(s) > 140:
@@ -575,43 +615,6 @@ class ClassGenerator(dict):
             yield "\n"
             
     # ----------------------------------------------------------------------------------------------------
-    # Create one file per class
-                
-    def create_files(self, fpath, select=None):
-        
-        for class_name in self.keys():
-            if select is None or class_name in select:
-                with open(fpath + f"{class_name.lower()}.py", 'w') as f:
-                    for line in self.gen_class(class_name):
-                        f.write(line)
-                    f.write("\n\n")
-                    
-    # ----------------------------------------------------------------------------------------------------
-    # Create one big file with all classes
-        
-    def create_one_file(self, file_name, select=None):
-        
-        with open(file_name, 'w') as f:
-            
-            f.write("import geonodes.core.datasockets as geosocks\n")
-            f.write("import geonodes.core.domain as geodom\n")
-            f.write("\n")
-            
-            if False:
-                f.write("# Imports to copy in __init__.py\n")
-                f.write('"""\n')
-
-                for line in self.gen_classes_import():
-                    f.write(line)
-                f.write('"""\n')
-            
-            for class_name in self.keys():
-                if select is None or class_name in select:
-                    for line in self.gen_class(class_name):
-                        f.write(line)
-                    f.write("\n\n")
-                    
-    # ----------------------------------------------------------------------------------------------------
     # Create the __init__.py file
     
     def create_init_file(self, file_name, version):
@@ -627,13 +630,56 @@ class ClassGenerator(dict):
             
             f.write("pi = 3.141592653589793\n\n")
             
-            f.write("from geonodes.core.node import Node, GroupInput, GroupOutput, Frame, Viewer, SceneTime\n")
+            f.write("from geonodes.core.node import Node, GroupInput, GroupOutput, Frame, Viewer, SceneTime, Group\n")
             f.write("from geonodes.core.tree import Tree, Groups\n\n")
+            f.write("from geonodes.nodes import nodes\n\n")
             
             for line in self.gen_classes_import():
                 f.write(line)
                 
-            f.write("\n")
+            f.write("\n")                    
+                    
+    # ----------------------------------------------------------------------------------------------------
+    # Create the source code files
+        
+    def create_files(self, folder, version=None):
+        
+        files = []
+        for class_name in CLASSES:
+            if CLASSES[class_name][0] not in files:
+                files.append(CLASSES[class_name][0])
+        
+        for file_name in files:
+        
+            with open(f"{folder}nodes/{file_name}.py", 'w') as f:
+                
+                if file_name == 'classes':
+                    f.write("from geonodes.nodes import nodes\n")
+                    f.write("import geonodes.core.datasockets as geosocks\n")
+                    f.write("from geonodes.nodes.domains import Vertex, Edge, Face, Corner, ControlPoint, Spline, CloudPoint, Instance\n")
+                    
+                elif file_name == 'domains':
+                    f.write("from geonodes.nodes import nodes\n")
+                    f.write("import geonodes.core.domain as geodom\n")
+                    
+                elif file_name == 'functions':
+                    f.write("from geonodes.nodes import nodes\n")
+                    
+                f.write("\n")
+                
+                for class_name in self.keys():
+                    
+                    if CLASSES[class_name][0] != file_name:
+                        continue
+                    
+                    for line in self.gen_class(class_name):
+                        f.write(line)
+                    f.write("\n\n")
+                    
+        if version is not None:
+            self.create_init_file(folder + '__init__.py', version)
+                    
+
                     
         
         
@@ -645,20 +691,23 @@ ATTRIBUTE = {
     'GeometryNodeAttributeStatistic': {
         'Geometry': Method(geometry='self', dtype=('data_type', 'attribute')),
         'Domain'  : [
-            DomMethod(cache=True, geometry='self', dtype=('data_type', 'attribute')),
-            DomMethod(cache=True, geometry='self', dtype=('data_type', 'attribute'), fname='attribute_mean',   ret_socket='mean'),
-            DomMethod(cache=True, geometry='self', dtype=('data_type', 'attribute'), fname='attribute_median', ret_socket='median'),
-            DomMethod(cache=True, geometry='self', dtype=('data_type', 'attribute'), fname='attribute_sum',    ret_socket='sum'),
-            DomMethod(cache=True, geometry='self', dtype=('data_type', 'attribute'), fname='attribute_min',    ret_socket='min'),
-            DomMethod(cache=True, geometry='self', dtype=('data_type', 'attribute'), fname='attribute_max',    ret_socket='max'),
-            DomMethod(cache=True, geometry='self', dtype=('data_type', 'attribute'), fname='attribute_range',  ret_socket='range'),
-            DomMethod(cache=True, geometry='self', dtype=('data_type', 'attribute'), fname='attribute_std',    ret_socket='standard_deviation'),
-            DomMethod(cache=True, geometry='self', dtype=('data_type', 'attribute'), fname='attribute_var',    ret_socket='variance'),
+            DomMethod(geometry='self', dtype=('data_type', 'attribute')),
+            DomMethod(geometry='self', dtype=('data_type', 'attribute'), fname='attribute_mean',   ret_socket='mean'),
+            DomMethod(geometry='self', dtype=('data_type', 'attribute'), fname='attribute_median', ret_socket='median'),
+            DomMethod(geometry='self', dtype=('data_type', 'attribute'), fname='attribute_sum',    ret_socket='sum'),
+            DomMethod(geometry='self', dtype=('data_type', 'attribute'), fname='attribute_min',    ret_socket='min'),
+            DomMethod(geometry='self', dtype=('data_type', 'attribute'), fname='attribute_max',    ret_socket='max'),
+            DomMethod(geometry='self', dtype=('data_type', 'attribute'), fname='attribute_range',  ret_socket='range'),
+            DomMethod(geometry='self', dtype=('data_type', 'attribute'), fname='attribute_std',    ret_socket='standard_deviation'),
+            DomMethod(geometry='self', dtype=('data_type', 'attribute'), fname='attribute_var',    ret_socket='variance'),
             ],
         },
     'GeometryNodeCaptureAttribute': {
-        'Geometry': StackMethod(ret_socket='attribute',    dtype=('data_type', 'attribute'), geometry='self'),
-        'Domain':   DomStackMethod(ret_socket='attribute', dtype=('data_type', 'attribute'), geometry='self'),
+        'Geometry': [
+            StackMethod(ret_socket='attribute',    dtype=('data_type', 'value'), geometry='self'),
+            Method(fname='capture_attribute_node'), # Used to automatically capture attributes
+            ],
+        'Domain':   DomStackMethod(ret_socket='attribute', dtype=('data_type', 'value'), geometry='self'),
         },
     'GeometryNodeAttributeDomainSize': {
         'Geometry' : Property(cache=True, geometry='self'),
@@ -691,8 +740,22 @@ ATTRIBUTE = {
         
         },
     'GeometryNodeStoreNamedAttribute': {
-        'Geometry': StackMethod(geometry='self',    dtype=('data_type', 'attribute')),
-        'Domain'  : DomStackMethod(geometry='self', dtype=('data_type', 'attribute')),
+        'Geometry': [
+            StackMethod(geometry='self',  dtype=('data_type', 'attribute')),
+            StackMethod(geometry='self',  fname='set_named_boolean', data_type="'BOOLEAN'"),
+            StackMethod(geometry='self',  fname='set_named_integer', data_type="'INT'"),
+            StackMethod(geometry='self',  fname='set_named_float',   data_type="'FLOAT'"),
+            StackMethod(geometry='self',  fname='set_named_vector',  data_type="'FLOAT_VECTOR'"),
+            StackMethod(geometry='self',  fname='set_named_color',   data_type="'FLOAT_COLOR'"),
+            ],
+        'Domain'  : [
+            DomStackMethod(geometry='self',  dtype=('data_type', 'attribute')),
+            DomStackMethod(geometry='self',  fname='set_named_boolean', data_type="'BOOLEAN'"),
+            DomStackMethod(geometry='self',  fname='set_named_integer', data_type="'INT'"),
+            DomStackMethod(geometry='self',  fname='set_named_float',   data_type="'FLOAT'"),
+            DomStackMethod(geometry='self',  fname='set_named_vector',  data_type="'FLOAT_VECTOR'"),
+            DomStackMethod(geometry='self',  fname='set_named_color',   data_type="'FLOAT_COLOR'"),
+            ],
         },
     'GeometryNodeRemoveAttribute': {
         'Geometry': StackMethod(geometry='self'),
@@ -782,6 +845,18 @@ COLOR = {
             Property(fname='rgb', ret_socket=('red', 'green', 'blue', 'alpha'), color='self', mode="'RGB'"),
             Property(fname='hsv', ret_socket=('red', 'green', 'blue', 'alpha'), color='self', mode="'HSV'"),
             Property(fname='hsl', ret_socket=('red', 'green', 'blue', 'alpha'), color='self', mode="'HSL'"),
+            
+            Property(color='self', mode='RGB', fname='alpha',   ret_socket='alpha'),
+            
+            Property(color='self', mode='RGB', fname='red',        ret_socket='red'),
+            Property(color='self', mode='RGB', fname='green',      ret_socket='green'),
+            Property(color='self', mode='RGB', fname='blue',       ret_socket='blue'),
+            
+            Property(color='self', mode='HSV', fname='hue',        ret_socket='red'),
+            Property(color='self', mode='HSV', fname='saturation', ret_socket='green'),
+            Property(color='self', mode='HSV', fname='value',      ret_socket='blue'),
+            
+            Property(color='self', mode='HSL', fname='lightness',  ret_socket='blue'),
             ],
     },
 }
@@ -853,23 +928,23 @@ CURVE1 = {
 
 CURVE2 = {
     'GeometryNodeInputCurveHandlePositions': {
-        'Spline': [
+        'ControlPoint': [
             Attribute(fname='handle_positions'),
             DomPropAttribute(fname='left_handle_positions', ret_socket='left', relative=None),
             DomPropAttribute(fname='right_handle_positions', ret_socket='right', relative=None),
             ],
     },
     'GeometryNodeInputTangent': {
-        'Spline': DomPropAttribute(fname='tangent', ret_socket='tangent'),
+        'ControlPoint': DomPropAttribute(fname='tangent', ret_socket='tangent'),
     },
     'GeometryNodeInputCurveTilt': {
-        'Spline': DomPropAttribute(fname='tilt', ret_socket='tilt'),
+        'ControlPoint': DomPropAttribute(fname='tilt', ret_socket='tilt'),
     },
     'GeometryNodeCurveEndpointSelection': {
-        'Spline': DomAttribute(fname='endpoint_selection', ret_socket='selection'),
+        'ControlPoint': DomAttribute(fname='endpoint_selection', ret_socket='selection'),
     },
     'GeometryNodeCurveHandleTypeSelection': {
-        'Spline': [
+        'ControlPoint': [
             DomAttribute(fname='handle_type_selection_node', ret_socket='selection'),
             Source(
                 header="def handle_type_selection(self, left=True, right=True, handle_type='AUTO'):",
@@ -900,7 +975,12 @@ CURVE2 = {
         'Spline': DomPropAttribute(fname='length', ret_socket=('length', 'point_count')),
     },
     'GeometryNodeSplineParameter': {
-        'Spline': DomPropAttribute(fname='parameter', ret_socket=('factor', 'length', 'index')),
+        'ControlPoint': [
+            DomPropAttribute(fname='parameter',        cache=True, ret_socket=('factor', 'length', 'index')),
+            DomPropAttribute(fname='parameter_factor', cache=True, ret_socket='factor'),
+            DomPropAttribute(fname='parameter_length', cache=True, ret_socket='length'),
+            DomPropAttribute(fname='parameter_index',  cache=True, ret_socket='index'),
+            ],
     },
     'GeometryNodeInputSplineResolution': {
         'Spline': DomPropAttribute(fname='resolution', ret_socket='resolution'),
@@ -913,19 +993,19 @@ CURVE2 = {
             ],
     },
     'GeometryNodeSetCurveRadius': {
-        'Spline': [
+        'ControlPoint': [
             DomStackMethod(fname='set_radius', curve='self'),
             DomSetter(fname='radius', stack=True, curve='self', radius='attr_value'),
             ],
     },
     'GeometryNodeSetCurveTilt': {
-        'Spline': [
+        'ControlPoint': [
             DomStackMethod(fname='set_tilt', curve='self'),
             DomSetter(fname='tilt', stack=True, curve='self', tilt='attr_value'),
             ],
     },
     'GeometryNodeSetCurveHandlePositions': {
-        'Spline': [
+        'ControlPoint': [
             DomStackMethod(fname='set_handle_positions', curve='self'),
             DomStackMethod(fname='set_handle_positions_left',  mode="'LEFT'"),
             DomStackMethod(fname='set_handle_positions_right', mode="'RIGHT'"),
@@ -934,7 +1014,7 @@ CURVE2 = {
             ],
     },
     'GeometryNodeCurveSetHandles': {
-        'Spline': [
+        'ControlPoint': [
             DomStackMethod(fname='set_handle_type_node', curve='self'),
             Source(
                 header="def set_handle_type(self, left=True, right=True, handle_type=""'AUTO'""):",
@@ -982,7 +1062,7 @@ CURVE_PRIMITIVES = {
     },
     'GeometryNodeCurvePrimitiveLine': {
         'Curve': [
-            Constructor(fname='Line', ret_socket='curve', mode="'POINT'", direction=None, length=None),
+            Constructor(fname='Line', ret_socket='curve', mode="'POINTS'", direction=None, length=None),
             Constructor(fname='LineDirection', ret_socket='curve', mode="'DIRECTION'", end=None),
             ],
     },
@@ -1068,7 +1148,7 @@ GEOMETRY = {
     },
     'GeometryNodeJoinGeometry': {
         'function': Function(ret_socket='geometry'),
-        'Geometry': StackMethod(fname='join', first_arg=None),
+        'Geometry': StackMethod(fname='join', first_arg=None, body_start="self = geometry[0]"),
     },
     'GeometryNodeMergeByDistance': {
         'Geometry': StackMethod(geometry='self'),
@@ -1092,11 +1172,11 @@ GEOMETRY = {
     'GeometryNodeSeparateComponents': {
         'Geometry': [
             Property(geometry='self', cache=True),
-            Property(geometry='self', cache=True, fname='separate_mesh',      ret_socket='mesh',        ret_class='Mesh'),
-            Property(geometry='self', cache=True, fname='separate_curve',     ret_socket='curve',       ret_class='Curve'),
-            Property(geometry='self', cache=True, fname='separate_points',    ret_socket='point_cloud', ret_class='Points'),
-            Property(geometry='self', cache=True, fname='separate_volume',    ret_socket='volume',      ret_class='Volume'),
-            Property(geometry='self', cache=True, fname='separate_instances', ret_socket='instances',   ret_class='Instances'),
+            Property(geometry='self', cache=True, fname='mesh_component',      ret_socket='mesh',        ret_class='Mesh'),
+            Property(geometry='self', cache=True, fname='curve_component',     ret_socket='curve',       ret_class='Curve'),
+            Property(geometry='self', cache=True, fname='points_component',    ret_socket='point_cloud', ret_class='Points'),
+            Property(geometry='self', cache=True, fname='volume_component',    ret_socket='volume',      ret_class='Volume'),
+            Property(geometry='self', cache=True, fname='instances_component', ret_socket='instances',   ret_class='Instances'),
             ],
     },
     'GeometryNodeSeparateGeometry': {
@@ -1142,7 +1222,13 @@ INPUT = {
         'Material': Constructor(fname='Material', ret_socket='material'),
     },
     'GeometryNodeObjectInfo': {
-        'Object': Method(fname='info'),
+        'Object': [
+            Method(fname='info'),
+            Method(fname='location', ret_socket='location'),
+            Method(fname='rotation', ret_socket='rotation'),
+            Method(fname='scale', ret_socket='scale'),
+            Method(fname='geometry', ret_socket='geometry'),
+            ]
     },
     'GeometryNodeSelfObject': {
         'Object': Constructor(fname='Self', ret_socket='self_object'),
@@ -1162,24 +1248,27 @@ INPUT = {
     },
     'GeometryNodeInputIndex': {
         'Geometry': PropAttribute(fname='index', ret_socket='index'),
-        'Domain'  : DomPropAttribute(fname='index', ret_socket='index'),
+        'Domain'  : [
+            DomPropAttribute(fname='index', ret_socket='index'),
+            DomPropAttribute(fname='domain_index', ret_socket='index'),
+            ],
     },
     'GeometryNodeInputNamedAttribute': {
         'Geometry': [
-            Attribute(fname='named_attribute',         ret_socket='attribute'),
-            Attribute(fname='named_attribute_float',   ret_socket='attribute', data_type="'FLOAT'"),
-            Attribute(fname='named_attribute_integer', ret_socket='attribute', data_type="'INT'"),
-            Attribute(fname='named_attribute_vector',  ret_socket='attribute', data_type="'FLOAT_VECTOR'"),
-            Attribute(fname='named_attribute_color',   ret_socket='attribute', data_type="'FLOAT_COLOR'"),
-            Attribute(fname='named_attribute_boolean', ret_socket='attribute', data_type="'BOOLEAN'"),
+            Attribute(fname='named_attribute',   ret_socket='attribute'),
+            Attribute(fname='get_named_float',   ret_socket='attribute', data_type="'FLOAT'"),
+            Attribute(fname='get_named_integer', ret_socket='attribute', data_type="'INT'"),
+            Attribute(fname='get_named_vector',  ret_socket='attribute', data_type="'FLOAT_VECTOR'"),
+            Attribute(fname='get_named_color',   ret_socket='attribute', data_type="'FLOAT_COLOR'"),
+            Attribute(fname='get_named_boolean', ret_socket='attribute', data_type="'BOOLEAN'"),
             ],
         'Domain': [
-            DomAttribute(fname='named_attribute',         ret_socket='attribute'),
-            DomAttribute(fname='named_attribute_float',   ret_socket='attribute', data_type="'FLOAT'"),
-            DomAttribute(fname='named_attribute_integer', ret_socket='attribute', data_type="'INT'"),
-            DomAttribute(fname='named_attribute_vector',  ret_socket='attribute', data_type="'FLOAT_VECTOR'"),
-            DomAttribute(fname='named_attribute_color',   ret_socket='attribute', data_type="'FLOAT_COLOR'"),
-            DomAttribute(fname='named_attribute_boolean', ret_socket='attribute', data_type="'BOOLEAN'"),
+            DomAttribute(fname='named_attribute',   ret_socket='attribute'),
+            DomAttribute(fname='get_named_float',   ret_socket='attribute', data_type="'FLOAT'"),
+            DomAttribute(fname='get_named_integer', ret_socket='attribute', data_type="'INT'"),
+            DomAttribute(fname='get_named_vector',  ret_socket='attribute', data_type="'FLOAT_VECTOR'"),
+            DomAttribute(fname='get_named_color',   ret_socket='attribute', data_type="'FLOAT_COLOR'"),
+            DomAttribute(fname='get_named_boolean', ret_socket='attribute', data_type="'BOOLEAN'"),
             ],
     },
     'GeometryNodeInputNormal': {
@@ -1193,8 +1282,10 @@ INPUT = {
     },
     'GeometryNodeInputRadius': {
         'Geometry'   : PropAttribute(fname='radius', ret_socket='radius'),
-        'Domain'     : DomPropAttribute(fname='radius', ret_socket='radius'),
-        'Spline'     : DomPropAttribute(fname='radius', ret_socket='radius'),
+        #'Domain'     : DomPropAttribute(fname='radius', ret_socket='radius'),
+        #'Spline'     : DomPropAttribute(fname='radius', ret_socket='radius'),
+        #'CloudPoint' : DomPropAttribute(fname='radius', ret_socket='radius'),
+        'ControlPoint' : DomPropAttribute(fname='radius', ret_socket='radius'),
         'CloudPoint' : DomPropAttribute(fname='radius', ret_socket='radius'),
     },
     'GeometryNodeInputSceneTime': {
@@ -1210,8 +1301,9 @@ INSTANCES = {
     'GeometryNodeInstanceOnPoints': {
         'Instances'     : [
             Constructor(fname='InstanceOnPoints', ret_socket='instances'),
-            Method(fname='on_points', ret_socket='instances', ret_classes='Instances', instance='self.data_socket'),
+            Method(fname='on_points', ret_socket='instances', ret_classes='Instances', instance='self'),
             ],
+        ('Points', 'Mesh', 'Curve') : Method(ret_socket='instances', ret_classes='Instances', points='self'),
         'Vertex'        : DomMethod(ret_socket='instances', ret_class='Instances', points='self'),
         'ControlPoint'  : DomMethod(ret_socket='instances', ret_class='Instances', points='self'),
         'CloudPoint'    : DomMethod(ret_socket='instances', ret_class='Instances', points='self'),
@@ -1260,7 +1352,11 @@ MATERIAL = {
     },
     'GeometryNodeSetMaterial': {
         'Geometry': StackMethod(geometry='self'),
-        'Domain':   DomPropAttribute(fname='material', geometry='self', material='attr_value'),
+        ('Face', 'Spline'):   [
+            DomStackMethod(geometry='self'),
+            PropReadError(fname='material', class_name='Domain'),
+            DomSetter(fname='material', geometry='self', material='attr_value'),
+            ]
     },
     'GeometryNodeSetMaterialIndex': {
         'Geometry': StackMethod(geometry='self'),
@@ -1346,7 +1442,7 @@ MESH = {
     'GeometryNodeInputMeshEdgeAngle': {
         'Edge': [
             DomPropAttribute(fname='angle', cache=True),
-            DomPropAttribute(fname='unisgned_angle', cache=True, ret_socket='unsigned_angle'),
+            DomPropAttribute(fname='unsigned_angle', cache=True, ret_socket='unsigned_angle'),
             DomPropAttribute(fname='signed_angle', cache=True, ret_socket='signed_angle'),
             ],
     },
@@ -1388,6 +1484,11 @@ MESH = {
             PropAttribute(fname='island_index', cache=True, ret_socket='island_index'),
             PropAttribute(fname='island_count', cache=True, ret_socket='island_count'),
             ],
+        'Face': [
+            DomPropAttribute(fname='island', cache=True),
+            DomPropAttribute(fname='island_index', cache=True, ret_socket='island_index'),
+            DomPropAttribute(fname='island_count', cache=True, ret_socket='island_count'),
+            ],
     },
     'GeometryNodeInputShortestEdgePaths': {
         'Mesh': Attribute(ret_socket=('next_vertex_index', 'total_cost')),
@@ -1403,7 +1504,7 @@ MESH = {
         'Mesh': StackMethod(geometry='self'),
         'Face': [
             DomStackMethod(geometry='self'),
-            DomSetter(fname='shade_smooth', geometry='self'),
+            DomSetter(fname='shade_smooth', geometry='self', shade_smooth='attr_value'),
             ],
     },
 }
@@ -1602,30 +1703,31 @@ UTILITIES = {
     },
     'FunctionNodeAlignEulerToVector': {
         'function': Function(ret_socket='rotation'),
-        'Vector': StackMethod(rotation='self'),
+        'Vector':   StackMethod(rotation='self'),
+        'Rotation': StackMethod(rotation='self', fname='align_to_vector'),
     },
     'FunctionNodeBooleanMath': {
         'function': [
-            Function(fname='b_and', ret_socket='boolean', operation='AND'),
-            Function(fname='b_or',  ret_socket='boolean', operation='OR'),
-            Function(fname='b_not', ret_socket='boolean', operation='NOT', boolean1=None),
-            Function(fname='nand',  ret_socket='boolean', operation='NAND'),
-            Function(fname='nor',   ret_socket='boolean', operation='NOR'),
-            Function(fname='xnor',  ret_socket='boolean', operation='XNOR'),
-            Function(fname='xor',   ret_socket='boolean', operation='XOR'),
-            Function(fname='imply', ret_socket='boolean', operation='IMPLY'),
-            Function(fname='nimply',ret_socket='boolean', operation='NIMPLY'),
+            Function(fname='b_and', ret_socket='boolean', operation="'AND'"),
+            Function(fname='b_or',  ret_socket='boolean', operation="'OR'"),
+            Function(fname='b_not', ret_socket='boolean', operation="'NOT'", boolean1=None),
+            Function(fname='nand',  ret_socket='boolean', operation="'NAND'"),
+            Function(fname='nor',   ret_socket='boolean', operation="'NOR'"),
+            Function(fname='xnor',  ret_socket='boolean', operation="'XNOR'"),
+            Function(fname='xor',   ret_socket='boolean', operation="'XOR'"),
+            Function(fname='imply', ret_socket='boolean', operation="'IMPLY'"),
+            Function(fname='nimply',ret_socket='boolean', operation="'NIMPLY'"),
             ],
         'Boolean': [
-            Method(fname='b_and',   boolean0='self', ret_socket='boolean', operation='AND'),
-            Method(fname='b_or',    boolean0='self', ret_socket='boolean', operation='OR'),
-            Method(fname='b_not',   boolean0='self', ret_socket='boolean', operation='NOT', boolean1=None),
-            Method(fname='nand',    boolean0='self', ret_socket='boolean', operation='NAND'),
-            Method(fname='nor',     boolean0='self', ret_socket='boolean', operation='NOR'),
-            Method(fname='xnor',    boolean0='self', ret_socket='boolean', operation='XNOR'),
-            Method(fname='xor',     boolean0='self', ret_socket='boolean', operation='XOR'),
-            Method(fname='imply',   boolean0='self', ret_socket='boolean', operation='IMPLY'),
-            Method(fname='nimply',  boolean0='self', ret_socket='boolean', operation='NIMPLY'),
+            Method(fname='b_and',   boolean0='self', ret_socket='boolean', operation="'AND'"),
+            Method(fname='b_or',    boolean0='self', ret_socket='boolean', operation="'OR'"),
+            Method(fname='b_not',   boolean0='self', ret_socket='boolean', operation="'NOT'", boolean1=None),
+            Method(fname='nand',    boolean0='self', ret_socket='boolean', operation="'NAND'"),
+            Method(fname='nor',     boolean0='self', ret_socket='boolean', operation="'NOR'"),
+            Method(fname='xnor',    boolean0='self', ret_socket='boolean', operation="'XNOR'"),
+            Method(fname='xor',     boolean0='self', ret_socket='boolean', operation="'XOR'"),
+            Method(fname='imply',   boolean0='self', ret_socket='boolean', operation="'IMPLY'"),
+            Method(fname='nimply',  boolean0='self', ret_socket='boolean', operation="'NIMPLY'"),
             ],
     },
     'ShaderNodeClamp': {
@@ -1658,18 +1760,18 @@ UTILITIES = {
                    fname='not_equal', operation="'NOT_EQUAL'"),
             ],
         'Integer': [
-            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'", epsilon=None),
-            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'",
+            Method(a='self', ret_socket='result', data_type="'INT'", c=None, angle=None, mode="'ELEMENT'", epsilon=None),
+            Method(a='self', ret_socket='result', data_type="'INT'", c=None, angle=None, mode="'ELEMENT'",
                    fname='less_than', operation="'LESS_THAN'", epsilon=None),
-            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'",
+            Method(a='self', ret_socket='result', data_type="'INT'", c=None, angle=None, mode="'ELEMENT'",
                    fname='less_equal', operation="'LESS_EQUAL'", epsilon=None),
-            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'",
+            Method(a='self', ret_socket='result', data_type="'INT'", c=None, angle=None, mode="'ELEMENT'",
                    fname='greater_than', operation="'GREATER_THAN'", epsilon=None),
-            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'",
+            Method(a='self', ret_socket='result', data_type="'INT'", c=None, angle=None, mode="'ELEMENT'",
                    fname='greater_equal', operation="'GREATER_EQUAL'", epsilon=None),
-            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'",
+            Method(a='self', ret_socket='result', data_type="'INT'", c=None, angle=None, mode="'ELEMENT'",
                    fname='equal', operation="'EQUAL'", epsilon=None),
-            Method(a='self', ret_socket='result', data_type="'INTEGER'", c=None, angle=None, mode="'ELEMENT'",
+            Method(a='self', ret_socket='result', data_type="'INT'", c=None, angle=None, mode="'ELEMENT'",
                    fname='not_equal', operation="'NOT_EQUAL'", epsilon=None),
             ],
         'String': [
@@ -1863,17 +1965,21 @@ UTILITIES = {
             ],            
         
         ('Integer', 'Float') : [
-            Method(ret_socket='value', fname='add',             operation="'ADD'",          value0='self', arg_rename={'value1': 'value'}, value2=None),
-            Method(ret_socket='value', fname='subtract',        operation="'SUBTRACT'",     value0='self', arg_rename={'value1': 'value'}, value2=None),
-            Method(ret_socket='value', fname='sub',             operation="'SUBTRACT'",     value0='self', arg_rename={'value1': 'value'}, value2=None),
-            Method(ret_socket='value', fname='multiply',        operation="'MULTIPLY'",     value0='self', arg_rename={'value1': 'value'}, value2=None),
-            Method(ret_socket='value', fname='mul',             operation="'MULTIPLY'",     value0='self', arg_rename={'value1': 'value'}, value2=None),
-            Method(ret_socket='value', fname='divide',          operation="'DIVIDE'",       value0='self', arg_rename={'value1': 'value'}, value2=None),
-            Method(ret_socket='value', fname='div',             operation="'DIVIDE'",       value0='self', arg_rename={'value1': 'value'}, value2=None),
+            
+            # Implemented manually to take into account operation between value and vector
+
+            #Method(ret_socket='value', fname='add',             operation="'ADD'",          value0='self', arg_rename={'value1': 'value'}, value2=None),
+            #Method(ret_socket='value', fname='subtract',        operation="'SUBTRACT'",     value0='self', arg_rename={'value1': 'value'}, value2=None),
+            #Method(ret_socket='value', fname='sub',             operation="'SUBTRACT'",     value0='self', arg_rename={'value1': 'value'}, value2=None),
+            #Method(ret_socket='value', fname='multiply',        operation="'MULTIPLY'",     value0='self', arg_rename={'value1': 'value'}, value2=None),
+            #Method(ret_socket='value', fname='mul',             operation="'MULTIPLY'",     value0='self', arg_rename={'value1': 'value'}, value2=None),
+            #Method(ret_socket='value', fname='divide',          operation="'DIVIDE'",       value0='self', arg_rename={'value1': 'value'}, value2=None),
+            #Method(ret_socket='value', fname='div',             operation="'DIVIDE'",       value0='self', arg_rename={'value1': 'value'}, value2=None),
             Method(ret_socket='value', fname='multiply_add',    operation="'MULTIPLY_ADD'", value0='self', arg_rename={'value1': 'multiplier', 'value2': 'addend'}),
             Method(ret_socket='value', fname='mul_add',         operation="'MULTIPLY_ADD'", value0='self', arg_rename={'value1': 'multiplier', 'value2': 'addend'}),
 
             Method(ret_socket='value', fname='power',           operation="'POWER'",        value0='self', arg_rename={'value1': 'exponent'}, value2=None),
+            Method(ret_socket='value', fname='pow',             operation="'POWER'",        value0='self', arg_rename={'value1': 'exponent'}, value2=None),
             Method(ret_socket='value', fname='logarithm',       operation="'LOGARITHM'",    value0='self', arg_rename={'value1': 'base'}, value2=None),
             Method(ret_socket='value', fname='log',             operation="'LOGARITHM'",    value0='self', arg_rename={'value1': 'base'}, value2=None),
             Method(ret_socket='value', fname='sqrt',            operation="'SQRT'",         value0='self', value1=None, value2=None),
@@ -2012,10 +2118,10 @@ VECTOR = {
     },
     'ShaderNodeSeparateXYZ': {
         'Vector': [
-            Method(fname='separate', cache=True, vector='self'),
-            Property(fname='x', cache=True, vector='self', ret_socket='x'),
-            Property(fname='y', cache=True, vector='self', ret_socket='y'),
-            Property(fname='z', cache=True, vector='self', ret_socket='z'),
+            Property(fname='separate', cache=True, vector='self'),
+            #Property(fname='x', cache=True, vector='self', ret_socket='x'),
+            #Property(fname='y', cache=True, vector='self', ret_socket='y'),
+            #Property(fname='z', cache=True, vector='self', ret_socket='z'),
             ],
     },
     'ShaderNodeVectorCurve': {
