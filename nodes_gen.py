@@ -14,7 +14,7 @@ The geonodes implements two layers:
     - Nodes layer
         One class per geometry nodes, for instance AlignEulerToVector wraps the node FunctionNodeAlignEulerToVector
         The Node class initialization creates the geometry nodes
-    - Sockets layer
+    - Data classes layer
         One class per data type:
             Basis data: Boolean, Integer, Float, Vector, Color, String
             Geometry  : Geometry, Curve, Mesh, Point, Instance, Volume, Curves
@@ -216,11 +216,10 @@ import bpy
 import mathutils
 from pprint import pprint, pformat
 
-#from generator import gen_sockets as gsock
-#from generator.documentation import Doc, Section, Text
-#from generator.pyparser import Parser
-
 from generator import code_gen
+
+from importlib import reload
+reload(code_gen)
 
 
 DEPRECATED = {
@@ -599,35 +598,6 @@ class Argument:
         return isinstance(self.wsocket, list)
     
     @property
-    def scall_demo(self):
-        
-        if self.arg_type == 'CLS':
-            return ""
-        
-        elif self.arg_type == 'SOCKET':
-            if self.is_multi:
-                return f"{self.name}_1, {self.name}_2, {self.name}_3"
-            elif self.is_self:
-                return ""
-            else:
-                return self.name
-        
-        elif self.arg_type == 'PARAM':
-            if self.is_fixed:
-                return ""
-            else:
-                return self.name
-            
-        elif self.arg_type == 'OTHER':
-            s = self.header_str
-            if s in ["node_label = None", "node_color = None"]:
-                return ""
-            return s
-        
-        else:
-            raise RuntimeError(f"Unkwnon argument type: {self.arg_type}")
-    
-    @property
     def sheader(self):
         
         if self.arg_type == 'CLS':
@@ -773,18 +743,6 @@ class Arguments(list):
                 
         else:
             self.append(arg)
-    
-    @property
-    def scall_demo(self):
-        s = ""
-        for arg in self:
-            sh = arg.scall_demo
-            if sh != "":
-                s += f", {sh}"
-        if s != "":
-            return s[2:]
-        else:
-            return s
         
     @property
     def sheader(self):
@@ -829,6 +787,7 @@ class Arguments(list):
         order = INPUT_SOCKETS_ORDER.get(bl_idname)
         if order is None:
             return
+        
         reorder = [None] * len(order)
         for arg in self:
             if not arg.is_socket:
@@ -1816,109 +1775,95 @@ class WNode:
         # ---------------------------------------------------------------------------
         # Class comment
         
-        section = self.documentation()
-        self.node_doc = section
+        yield _1_ + '"""' + f"Node *{self.bnode.name}*\n"
+        yield _1_ + f".. _{self.node_name}:\n"
         
-        if False:
-            first = True
-            for line in section.gen_text(False):
-                if first:
-                    yield _1_ + '"""' + line
-                    first = False
-                else:
-                    yield _1_ + line
-                    
-            yield _1_ + '"""' + "\n"
-            
-        else:
-            yield _1_ + '"""' + f"Node *{self.bnode.name}*\n"
-            yield _1_ + f".. _{self.node_name}:\n"
-            
-            # ---- Classes calling this node
-            
-            if cl_gen is not None:
-                node_ref = cl_gen.get(self.bl_idname)
-                if node_ref is None:
-                    print(f"CAUTION: node {self.bl_idname} not implemented in class generators")
-                    
-                else:
-                    yield _1_ + "Node implementation:"
-                    for class_name, gs in node_ref.items():
-                        if class_name == 'function':
-                            yield _2_ + 'global functions:'
-                        else:
-                            yield _2_ + f"{class_name}:"
-                            
-                        gens = gs if isinstance(gs, list) else [gs]
-                        nref = 0
-                        sref = _3_
-                        for gen in gens:
-                            sref += gen.fname(self) + " "
-                            nref += 1
-                            if nref % 10 == 0:
-                                yield sref
-                                nref = 0
-                                sref = _3_
-                        if nref > 0:
+        # ---- Classes calling this node
+        
+        if cl_gen is not None:
+            node_ref = cl_gen.get(self.bl_idname)
+            if node_ref is None:
+                pass
+                #print(f"CAUTION: node {self.bl_idname} not implemented in class generators")
+                
+            else:
+                yield _1_ + "Node implementation:"
+                for class_name, gs in node_ref.items():
+                    if class_name == 'function':
+                        yield _2_ + 'global functions:'
+                    else:
+                        yield _2_ + f"{class_name}:"
+                        
+                    gens = gs if isinstance(gs, list) else [gs]
+                    nref = 0
+                    sref = _3_
+                    for gen in gens:
+                        sref += gen.fname(self) + " "
+                        nref += 1
+                        if nref % 10 == 0:
                             yield sref
+                            nref = 0
+                            sref = _3_
+                    if nref > 0:
+                        yield sref
 
-                    yield "\n"
+                yield "\n"
             
-            # ----- Arguments
+        # ----- Arguments
+        
+        yield _1_ + "Args:"
+        
+        for uname, wsock in self.inputs.unames.items():
             
-            yield _1_ + "Args:"
+            if isinstance(wsock, list):
+                sval = f"``{self.driving_param}`` dependant"
+            elif wsock.is_multi_input:
+                sval = f"<m> {wsock.class_name}"
+            else:
+                sval = f"{wsock.class_name}"
+                
+            yield _2_ + f"{uname} (DataSocket): {sval}"
             
-            for uname, wsock in self.inputs.unames.items():
+        for name, param in self.parameters.items():
+            
+            stype = param.param_type
+            if stype == 'str':
+                descr =f"Node parameter, default = '{param.default}'"
+            else:
+                descr =f"Node parameter, default = {param.default}"
+            
+            if param.is_enum:
+                descr += f" in {param.values}"
+                
+            yield _2_ + f"{name} ({stype}): {descr}"
+        
+        yield _2_ + "node_color (color): Node color"
+        yield _2_ + "node_label (str): Node label"
+        yield _0_
+        
+        if self.outputs:
+            yield _0_ + _1_ + "Output sockets:"
+            for uname, wsock in self.outputs.unames.items():
                 
                 if isinstance(wsock, list):
                     sval = f"``{self.driving_param}`` dependant"
-                elif wsock.is_multi_input:
-                    sval = f"<m> {wsock.class_name}"
                 else:
-                    sval = f"{wsock.class_name}"
-                    
-                yield _2_ + f"{uname} (DataSocket): {sval}"
+                    sval = wsock.class_name
+                        
+                yield _2_ + f"- **{uname}** : {sval}"
                 
-            for name, param in self.parameters.items():
-                
-                stype = param.param_type
-                if stype == 'str':
-                    descr =f"Node parameter, default = '{param.default}'"
-                else:
-                    descr =f"Node parameter, default = {param.default}"
-                
-                if param.is_enum:
-                    descr += f" in {param.values}"
-                    
-                yield _2_ + f"{name} ({stype}): {descr}"
+        
+        if self.has_shared_sockets:
             
-            yield _2_ + "node_color (color): Node color"
-            yield _2_ + "node_label (str): Node label"
-            yield _0_
+            yield _0_ + _1_ + "Shared sockets:"
+                                     
+            yield _2_ + f"- Driving parameter : ``{self.driving_param}`` in {self.parameters[self.driving_param].values}"
+            yield _2_ + f"- Input sockets  : {list(self.inputs.shared_sockets.keys())}"
+            yield _2_ + f"- Output sockets : {list(self.outputs.shared_sockets.keys())}"
             
-            if self.outputs:
-                yield _0_ + _1_ + "Output sockets:"
-                for uname, wsock in self.outputs.unames.items():
-                    
-                    if isinstance(wsock, list):
-                        sval = f"``{self.driving_param}`` dependant"
-                    else:
-                        sval = wsock.class_name
-                            
-                    yield _2_ + f"- **{uname}** : {sval}"
-                    
-            
-            if self.has_shared_sockets:
+        yield _0_ + _1_ + f".. blid:: {self.bl_idname}"
                 
-                yield _0_ + _1_ + "Shared sockets:"
-                                         
-                yield _2_ + f"- Driving parameter : ``{self.driving_param}`` in {self.parameters[self.driving_param].values}"
-                yield _2_ + f"- Input sockets  : {list(self.inputs.shared_sockets.keys())}"
-                yield _2_ + f"- Output sockets : {list(self.outputs.shared_sockets.keys())}"
-                
-            yield _0_ + _1_ + f".. blid:: {self.bl_idname}"
-                    
-            yield _0_ + _1_ + '"""' + "\n"
+        yield _0_ + _1_ + '"""' + "\n"
             
             
     
@@ -2086,26 +2031,6 @@ class BNodes(dict):
 # ====================================================================================================
 # Generate the files
 
-#generated_nodes = []
-#generated_sockets = []
-
-# ----------------------------------------------------------------------------------------------------
-# Package documentation
-
-package_doc = Doc()
-package_doc.md_folder = "docs"
-package_doc.references['index'] = "/docs/index.md"
-
-sockets_doc = Section(package_doc, "Data sockets")
-sockets_doc.md_folder = "sockets"
-
-nodes_doc   = Section(package_doc, "Nodes")
-nodes_doc.md_folder = "nodes"
-
-core_doc   = Section(package_doc, "Core")
-core_doc.md_folder = ""
-
-
 # ----------------------------------------------------------------------------------------------------
 # Generate the classes
 # 
@@ -2194,11 +2119,6 @@ from geonodes.core.node import Node
 
             for line in wn.gen_node_class(cl_gen=code_gen.ALL):
                 f.write(line)
-                
-            # ----- The documentation
-            
-            wn.node_doc.md_file = f"{wn.node_name}.md"
-            nodes_doc.add_section(wn.node_doc)
                     
             # ----- For creation by bl_idname
             
@@ -2225,8 +2145,6 @@ def create_geonodes(fpath):
     print("-"*80)
     print("Generating nodes and sockets python from Blender geometry nodes")
     print(f"Blender version: {bpy.app.version_string}")
-    print("From Blender V3.4: data classes are not generated anymore")
-    print("They must be updated manually.")
     print("")
                 
     # ----- Create all the blender nodes
@@ -2260,19 +2178,9 @@ def create_geonodes(fpath):
     print("Done")
     print()
     
-    print("Nodes not implemented as socket methods:")
-    count = 0
-    for bnode in BNODES.values():
-        if (bnode.bl_idname not in gsock.DataClass.GENS) and (bnode.bl_idname not in FIELDS):
-            print(f"    {bnode.bl_idname:40s}: '{bnode.name}'")
-            count += 1
-            
-    if count == 0:
-        print("   all (ok)")
-    else:
-        print(f"\n   NOTE: Check if the {count} node{'s' if count > 1 else ''} should be implemented as methods.\n")
-        
     print('Generation completed')
+    print()
+    print("Import geonodes.test_file to test the generation")
     print()
     print('-'*80)
     print("NOTE: if new nodes are created, don't forget to run node_sizes():")
