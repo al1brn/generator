@@ -55,6 +55,7 @@ CLASSES = {
     'Instance'      : ('domains', 'Domain'),
     }
 
+
 # ====================================================================================================
 # Source code generator
 
@@ -918,7 +919,7 @@ class ClassGenerator(dict):
     
     def create_api_doc(self, folder):
         
-        nav_menu = "[main](../structure.md) - [nodes](nodes.md) - [nodes menus](nodes_menus.md)"
+        nav_menu = "[main](../index.md) - [nodes](nodes.md) - [nodes menus](nodes_menus.md)"
         doc_header = f"> {nav_menu}\n\n"
         
         print("Data classes api...")
@@ -927,6 +928,26 @@ class ClassGenerator(dict):
         # Classes documentation
         
         for class_name in self:
+            
+            # ----------------------------------------------------------------------------------------------------
+            # Read the global and final description
+            
+            try:
+                descr_file_name = f"{folder}docs/{class_name}.md"
+                with open(descr_file_name, 'r') as f:
+                    descr = f.readlines()
+            except:
+                descr = None
+                
+            try:
+                ex_file_name = f"{folder}docs/examples_{class_name}.md"
+                with open(ex_file_name, 'r') as f:
+                    examples = f.readlines()
+            except:
+                examples = None
+                
+            # ----------------------------------------------------------------------------------------------------
+            # Read the global and final description
 
             file_name = f"{folder}docs/api/{class_name}.md"
 
@@ -937,6 +958,14 @@ class ClassGenerator(dict):
                     f.write(f"# class {class_name}\n\n")
                     
                 f.write(doc_header)
+                
+                # ----- Description
+                
+                if descr is not None:
+                    f.writelines(descr)
+                    
+                if examples is not None:
+                    f.write("> see [examples](#examples)\n\n")
                     
                 # ----- TOC
                 
@@ -968,6 +997,13 @@ class ClassGenerator(dict):
                             
                     if ok_lines:
                         f.write(f"<sub>Go to [top](#class-{class_name}) - {nav_menu}</sub>\n\n")
+                        
+                # ----- Examples
+                
+                if examples is not None:
+                    f.writelines(examples)
+                
+                
                         
         # ----------------------------------------------------------------------------------------------------
         # Nodes are listed in alphabetical order and in the Blender add menu order
@@ -1198,9 +1234,24 @@ class ClassGenerator(dict):
             
             f.write("\n")
             f.write(_1_ + "tree.og = geometry\n\n")
+            
+        # ----------------------------------------------------------------------------------------------------
+        # Copy files from docs to docs/api
+        
+        for fname in ['Tree.md', 'Trees.md']:
+            fsource = folder + 'docs/' + fname
+            ftarget = folder + 'docs/api/' + fname
+            
+            with open(fsource, 'r') as f:
+                text = f.readlines()
                 
-                        
-                            
+            with open(ftarget, 'w') as f:
+                f.writelines(text)
+                
+                
+            
+            
+            
                         
                             
 # ====================================================================================================
@@ -1280,9 +1331,20 @@ COMMENTS = {
                     ], 
                 com_ret   = 'CLASS_NAME'),
         
+    ('Float', 'Integer', 'Boolean', 'String', 'Vector', 'Color',
+     'Collection', 'Object', 'Image', 'Texture', 'Material'):
+        Comment(fname     ='to_output',     
+                header    = 'def to_output(name):',
+                com_descr = "Create an output socket to the current Tree with the name given in argument."+
+                            "Later, use the snake_case version of the name to read the socket from the [Group](Group.md) node.\n\n"+
+                            "- Let's create an output socket named " + '"Result"' + ' in the current tree named "Geometry Nodes": `value.to_output("Result")`\n'+
+                            '- In another tree, the previous tree can be created as custom group: `res = Group("Geometry Nodes", **kwargs).result`\n\n'
+                            "See [Group](Group.md) and [Trees](Trees.md) for more detail.\n\n"
+                com_args  =[
+                    'name: name of the group output socket to create,
+                    ],
+                com_ret   = "None"),
     }
-        
-        
         
 # ====================================================================================================
 # Attribute Menu
@@ -2152,7 +2214,7 @@ MESH_PRIMITIVES = {
             ],
     },
     'GeometryNodeMeshUVSphere': {
-        'Mesh': Constructor(fname='Circle', ret_socket='mesh'),
+        'Mesh': Constructor(fname='UVSphere', ret_socket='mesh'),
     },
 }
 

@@ -7,10 +7,13 @@ Created on Wed Jun  8 09:00:41 2022
 """
 
 import re
-import pprint
+from pprint import pprint, pformat
 
-# ----------------------------------------------------------------------------------------------------
-# Simple parser
+def ok_comment(comment):
+    return comment is not None and comment != ""
+
+# ====================================================================================================
+# Simple python parser
 
 class Parser:
     def __init__(self, text):
@@ -289,7 +292,11 @@ class Parser:
                     
             @property
             def comment(self):
-                return self.bef_comment if self.aft_comment == "" else self.aft_comment
+                # Takes before comment or not
+                if True:
+                    return self.aft_comment
+                else:
+                    return self.bef_comment if self.aft_comment == "" else self.aft_comment
             
             @comment.setter
             def comment(self, value):
@@ -374,8 +381,11 @@ class Parser:
                     func_indent = 99
                     
                 else:
+                    prop_setter = False
                     for i in reversed(range(line_index)):
                         if lines[i] != "" and lines[i][0] == '@':
+                            if lines[i][-6:] == 'setter':
+                                prop_setter = True
                             doc.decorators.append(lines[i])
                     
                     # Global function
@@ -387,12 +397,281 @@ class Parser:
                     # Class method
                     else:
                         doc.class_doc = cur_class
-                        cur_class.funcs[doc.name] = doc
+                        doc_name = doc.name
+                        if prop_setter:
+                            doc_name += ".setter"
+                        cur_class.funcs[doc_name] = doc
                         func_indent = indent
                         
                 break
             
         return docs
+    
+# ====================================================================================================
+# Class documentation
+
+class ClassDoc:
+    
+    def __init__(self, class_name):
+        self.name       = class_name
+        self.init       = None
+        self.comment    = ""
+        
+        self.props      = {}
+        self.cs_methods = {}
+        self.methods    = {}
+        
+    # ----------------------------------------------------------------------------------------------------
+    # Rep
+    
+    def __repr__(self):
+        s = f"class {self.name}\n"
+        s += f"   - init       : {self.init is not None}\n"
+        s += f"   - comment    : {self.comment[:15]}...\n"
+        s += f"   - props      : {len(self.props)}\n"
+        s += f"   - cs_methods : {len(self.cs_methods)}\n"
+        s += f"   - methods    : {len(self.methods)}\n"
+        return s
+        
+    # ----------------------------------------------------------------------------------------------------
+    # Add the result of a python file parsing
+        
+    def add(self, cdoc):
+        
+        # ----- Class Comment
+        
+        if cdoc.comment != "":
+            if self.comment != "":
+                self.comment += "\n\n"
+            self.comment += cdoc.comment
+            
+        self.is_class = cdoc.is_class
+        
+        if self.is_class:
+            
+            # ----- Methods
+            
+            for name, fdoc in cdoc.funcs.items():
+                if name == '__init__':
+                    self.init = {
+                        'args':    fdoc.args,
+                        'comment': fdoc.comment,
+                        }
+                    continue
+                
+                if not ok_comment(fdoc.comment):
+                    continue
+                
+                is_prop   = False
+                is_setter = False
+                is_clmeth = False
+                for d in fdoc.decorators:
+                    if d in ['@classmethod', '@staticmethod']:
+                        is_clmeth = True
+                    if d == '@property':
+                        is_prop = True
+                    if d[-6:] == 'setter':
+                        is_setter = True
+                        
+                if is_prop or is_setter:
+                    if is_prop:
+                        self.props[name] = fdoc.comment
+                        
+                    elif fdoc.comment != "":
+                        fname = name[:-7]
+                        if self.props[fname] == "":
+                            self.props[fname] = fdoc.comment
+                        else:
+                            self.props[fname] += "\n\nSetter\n\n" + fdoc.comment
+                            
+                elif is_clmeth:
+                    self.cs_methods[name] = {
+                        'deco'   : fdoc.decorators,
+                        'args'   : fdoc.args,
+                        'comment': fdoc.comment,
+                        }
+                    
+                else:
+                    self.methods[name] = {
+                        'args'   : fdoc.args,
+                        'comment': fdoc.comment,
+                        }
+                
+    # ----------------------------------------------------------------------------------------------------
+    # Add inherited things
+    
+    def inherits_from(self, super_doc):
+        for name, prop in super_doc.props.items():
+            if name not in self.props:
+                self.props[name] = prop
+                
+        for name, meth in super_doc.cs_methods.items():
+            if name not in self.cs_methods:
+                self.cs_methods[name] = meth
+                
+        for name, meth in super_doc.methods.items():
+            if name not in self.methods:
+                self.methods[name] = meth
+                
+    # ----------------------------------------------------------------------------------------------------
+    # Gen the markdown text
+    
+    def gen_markdown(self):
+        
+        yield f"Class {self.name}\n\n"
+        
+        if ok_comment(self.comment):
+            yield self.comment + "\n\n"
+            
+        if self.init is not None:
+            yield f"```python\n{self.name}{self.init['args']}\n```\n\n"
+            
+            if ok_comment(self.init['comment']):
+                yield self.init['comment'] + "\n\n"
+                
+        if self.props:
+            yield "## Properties\n\n"
+            for prop_name in sorted(self.props):
+                comment = self.props[prop_name]
+                yield f"### {prop_name}\n\n"
+                if ok_comment(comment):
+                    yield comment + "\n\n"
+                    
+        for section, methods in zip(["Class and static methods", "Methods"], [self.cs_methods, self.methods]):
+            if methods:
+                yield f"## {section}\n\n"
+                
+                for mname in sorted(methods):
+                    meth = methods[mname]
+                    yield f"### {mname}\n\n"
+                    
+                    deco = meth.get('deco')
+                    if deco:
+                        sdeco = "\n".join(deco) + "\n"
+                    else:
+                        sdeco = ""
+                    
+                    yield f"```python\n{sdeco}def {mname}{meth['args']}\n```\n\n"
+                    
+                    if ok_comment(meth['comment']):
+                        yield meth['comment'] + "\n\n"
+
+# ====================================================================================================
+# A module
+
+module_path = "/Users/alain/Documents/blender/scripts/modules/geonodes/"
+
+
+class Module:
+    
+    def __init__(self, file_name):
+        self.name      = file_name.split("/")[-1].split(".")[0]
+        self.file_name = file_name
+        
+        self.parsed     = Parser.FromFile(module_path + file_name).documentation()
+        self.class_docs = {}
+        
+        for class_name, cdoc in self.parsed.items():
+            class_doc = ClassDoc(class_name)
+            class_doc.add(cdoc)
+            self.class_docs[class_name] = class_doc
+            
+    def __repr__(self):
+        return f"module {self.name}\n{pformat(self.class_docs)}\n"
+    
+    def inheritance(self, classes, super_classes=None, super_module=None):
+        
+        module = self if super_module is None else super_module
+        
+        if not isinstance(classes, list):
+            classes = [classes]
+            
+        if super_classes is None:
+            super_classes = classes
+        elif not isinstance(super_classes, list):
+            super_classes = [super_classes] * len(classes)
+        
+        for class_spec, super_spec in zip(classes, super_classes):
+            self.class_docs[class_spec].inherits_from(module.class_docs[super_spec])
+            
+    def mark_down(self, class_name):
+        return [line for line in self.class_docs[class_name].gen_markdown()]
+
+                        
+# ====================================================================================================
+# Build geonodes auto doc
+
+
+def build_geonodes_auto_doc():
+    
+    #arrange     = Module(file_name="core/arrange.py"),
+    #colors      = Module(file_name="core/colors.py"),
+    #context     = Module(file_name="core/context.py"),
+
+    datasockets = Module(file_name="core/datasockets.py")
+    domain      = Module(file_name="core/domain.py")
+    node        = Module(file_name="core/node.py")
+    socket      = Module(file_name="core/socket.py")
+    tree        = Module(file_name="core/tree.py")
+    
+    classes     = Module(file_name="nodes/classes.py")
+    domains     = Module(file_name="nodes/domains.py")
+    
+    print(datasockets)
+    
+    # ----- Datasockets inheritance
+    
+    socket.inheritance('DataSocket', 'Socket')
+    datasockets.inheritance(
+        ['Boolean', 'IntFloat', 'Vector', 'Color', 'String',
+         'Geometry',
+         'Collection', 'Object', 'Material', 'Texture', 'Image'],
+        super_classes = 'DataSocket',
+        super_module  = socket,
+        )
+    datasockets.inheritance(['Float', 'Integer'], 'IntFloat')
+    
+    # ----- Final data classes
+
+    classes.inheritance(
+        ['Boolean', 'Integer', 'Float', 'Vector', 'Color', 'String',
+         'Geometry',
+         'Collection', 'Object', 'Material', 'Texture', 'Image'],
+        super_classes = None,
+        super_module  = datasockets,
+        )
+
+    classes.inheritance(
+        ['Mesh', 'Curve', 'Instances', 'Points', 'Volume'],
+        super_classes = 'Geometry',
+        super_module  = None,
+        )
+    
+    # ----- Nodes inheritance
+    
+    node.inheritance(['Viewer','Frame', 'CustomGroup', 'SceneTime'], 'Node')
+    node.inheritance(['Group','GroupInput', 'GroupOutput'], 'CustomGroup')
+    
+    # ----- Domains inheritance
+    
+    domain.inheritance('Domain', 'Domain', domain)
+    domains.inheritance(
+        ['Vertex', 'Edge', 'Face', 'Corner', 'ControlPoint', 'Spline', 'CloudPoint', 'Instance'],
+        super_classes = 'Domain',
+        super_module  = None
+        )
+    
+    print("".join(classes.mark_down('Vector')))
+    
+    
+    
+                                                       
+                                                       
+                                                      
+        
+                
+build_geonodes_auto_doc()               
+                
     
     
 def debug():
@@ -401,6 +680,10 @@ class Foo1:
     # Foo comment 1
     # Foo comment 2
     
+    def __init__(self, name=""):
+        yeee !
+    
+    @classmethod
     def bar():
         # bar comment 1
         # bar comment 2
@@ -412,6 +695,15 @@ class Foo1:
         # baz comment 2
         
         bar code
+        
+    @property
+    def prop(self):
+        ret toto
+        
+    @prop.setter
+    def prop(self, value):
+        toto
+    
 
 class Foo2:
     # Foo comment 1
@@ -429,18 +721,46 @@ class Foo2:
         
         bar code
 """
-    
+
     doc = Parser(text).documentation()
     
+    
     for class_name, cdoc in doc.items():
-        for name, fdoc in cdoc.funcs.items():
-            print(class_name, name)
-            print()
-            
+        class_doc = ClassDoc(class_name)
+        class_doc.add(cdoc)
+        for line in class_doc.gen_markdown():
+            print(line)
+        
+    
+    
+    #for class_name, cdoc in doc.items():
+    #    for name, fdoc in cdoc.funcs.items():
+    #        print(class_name, name, fdoc.decorat)
+    #        print()
+    
+#debug()
+    
+if False:
+
+    fpath = "/Users/alain/Documents/blender/scripts/modules/geonodes/"
+    
+    file_name = fpath + "core/datasockets.py"
+    
+    print("="*100)
+    
+    doc = Parser.FromFile(file_name).documentation()
+    for class_name, cdoc in doc.items():
+        class_doc = ClassDoc(class_name)
+        class_doc.add(cdoc)
+        
+        for line in class_doc.gen_markdown():
+            print(line)
+        
+        #break
     
     #print(doc)
-        
-debug()    
+ 
+
     
     
     
