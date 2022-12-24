@@ -410,6 +410,8 @@ class Parser:
 # ====================================================================================================
 # Class documentation
 
+SECTIONS = ['Properties', 'Class and static methods', 'Methods']
+
 class ClassDoc:
     
     def __init__(self, class_name):
@@ -417,9 +419,22 @@ class ClassDoc:
         self.init       = None
         self.comment    = ""
         
-        self.props      = {}
-        self.cs_methods = {}
-        self.methods    = {}
+        self.inheritance = {section: set() for section in SECTIONS}
+        
+        self.sections = {section: {} for section in SECTIONS}
+        
+    @property
+    def props(self):
+        return self.sections[SECTIONS[0]]
+    
+    @property
+    def cs_methods(self):
+        return self.sections[SECTIONS[1]]
+    
+    @property
+    def methods(self):
+        return self.sections[SECTIONS[2]]
+    
         
     # ----------------------------------------------------------------------------------------------------
     # Rep
@@ -475,14 +490,14 @@ class ClassDoc:
                         
                 if is_prop or is_setter:
                     if is_prop:
-                        self.props[name] = fdoc.comment
+                        self.props[name] = {'comment': fdoc.comment}
                         
                     elif fdoc.comment != "":
                         fname = name[:-7]
-                        if self.props[fname] == "":
-                            self.props[fname] = fdoc.comment
+                        if self.props[fname]['comment'] == "":
+                            self.props[fname]['comment'] = {'comment': fdoc.comment}
                         else:
-                            self.props[fname] += "\n\nSetter\n\n" + fdoc.comment
+                            self.props[fname]['comment'] += "\n\nSetter\n\n" + fdoc.comment
                             
                 elif is_clmeth:
                     self.cs_methods[name] = {
@@ -496,48 +511,155 @@ class ClassDoc:
                         'args'   : fdoc.args,
                         'comment': fdoc.comment,
                         }
+                    
+    # ----------------------------------------------------------------------------------------------------
+    # Get inheritance
+    
+    def get_inheritance(self):
+        
+        inheritance = {section: set(methods) for section, methods in self.inheritance.items()}
+        
+        for section in SECTIONS:
+            methods = self.sections[section]
+            if methods:
+                inheritance[section].update({f"[{name}]({self.name}.md#{name})" for name in methods})
+                
+        return inheritance
+        
+    # ----------------------------------------------------------------------------------------------------
+    # Add inheritance
+    
+    def add_inheritance(self, inheritance):
+        for section in SECTIONS:
+            self.inheritance[section].update(inheritance[section])
                 
     # ----------------------------------------------------------------------------------------------------
     # Add inherited things
     
     def inherits_from(self, super_doc):
-        for name, prop in super_doc.props.items():
-            if name not in self.props:
-                self.props[name] = prop
-                
-        for name, meth in super_doc.cs_methods.items():
-            if name not in self.cs_methods:
-                self.cs_methods[name] = meth
-                
-        for name, meth in super_doc.methods.items():
-            if name not in self.methods:
-                self.methods[name] = meth
+        
+        if self.init is None and super_doc.init is not None:
+            self.init = super_doc.init
+            
+        if self.comment == "":
+            self.comment = super_doc.comment
+        
+        for section in SECTIONS:
+            super_methods = super_doc.sections.get(section)
+            methods       = self.sections.get(section)
+
+            for name, super_meth in super_methods.items():
+                if name not in methods:
+                    methods[name] = super_meth
+                    
+            # ----- Inheritance
+            
+            self.inheritance[section].update(super_doc.inheritance[section])
                 
     # ----------------------------------------------------------------------------------------------------
     # Gen the markdown text
     
     def gen_markdown(self):
         
-        yield f"Class {self.name}\n\n"
+        def desindent(text, n):
+            lines = text.split("\n")
+            ok_args    = False
+            ok_returns = False
+            
+            for i in range(len(lines)):
+                
+                line = lines[i]
+                
+                # ----- Desindent
+                
+                left = line[:n*4]
+                if left.strip() == "":
+                    lines[i] = line[n*4:]
+                    
+                # ----- Args formatting
+                    
+                line = lines[i]
+                
+                if line == "":
+                    ok_args    = False
+                    ok_returns = False
+                    
+                else:
+                    if ok_args or ok_returns:
+                        if line[0] == " ":
+                            line = line.strip()
+                            if line == "":
+                                ok_args    = False
+                                ok_returns = False
+                            else:
+                                if line[0] != '-':
+                                    line = "- " + line
+                            if ok_args or ok_returns:
+                                lines[i] = line
+                                
+                    else:
+                        if line.strip().lower()[:3] == 'arg':
+                            lines[i] = "#### Args:"
+                            ok_args    = True
+                            ok_returns = False
+                            
+                        elif line.strip().lower()[:6] == 'return' and len(line.strip()) < 10:
+                            lines[i] = "#### Returns:"
+                            ok_args    = False
+                            ok_returns = True
+                    
+            return "\n".join(lines)
+        
+        yield f"# Class {self.name}\n\n"
+        
+        yield "> [main](../index.md) - [nodes](nodes.md) - [nodes menus](nodes_menus.md)\n\n"
+        
+        # ----------------------------------------------------------------------------------------------------
+        # Global comment
+        
+        # ----- Comment
         
         if ok_comment(self.comment):
-            yield self.comment + "\n\n"
+            yield desindent(self.comment, 1) + "\n\n"
+            
+        # Completed by init
             
         if self.init is not None:
+            yield "### Constructor\n\n"
+            
             yield f"```python\n{self.name}{self.init['args']}\n```\n\n"
             
             if ok_comment(self.init['comment']):
-                yield self.init['comment'] + "\n\n"
+                yield desindent(self.init['comment'], 2) + "\n\n"
                 
-        if self.props:
-            yield "## Properties\n\n"
-            for prop_name in sorted(self.props):
-                comment = self.props[prop_name]
-                yield f"### {prop_name}\n\n"
-                if ok_comment(comment):
-                    yield comment + "\n\n"
+        # ----- TOC
+        
+        yield "## Content\n\n"
+        
+        for section in SECTIONS:
+            methods = self.sections[section]
+            inhs    = self.inheritance[section]
+            if methods or inhs:
+                yield f"**{section}**\n\n"
+                
+                if methods:
+                    lines = [f"[{mname}](#{mname})" for mname in sorted(methods)]
+                    yield " | ".join(lines)
+                    del lines
+                    yield "\n\n"
                     
-        for section, methods in zip(["Class and static methods", "Methods"], [self.cs_methods, self.methods]):
+                if inhs:
+                    yield "***Inherited***\n\n"
+                    yield " | ".join(sorted(inhs))
+                    yield "\n\n"
+
+        # ----------------------------------------------------------------------------------------------------
+        # Sections
+        
+        for section in SECTIONS:
+            
+            methods = self.sections[section]
+            
             if methods:
                 yield f"## {section}\n\n"
                 
@@ -550,36 +672,49 @@ class ClassDoc:
                         sdeco = "\n".join(deco) + "\n"
                     else:
                         sdeco = ""
+                        
+                    if meth.get('args'):
+                        yield f"```python\n{sdeco}def {mname}{meth['args']}\n```\n\n"
+                        
+                    if ok_comment(meth.get('comment')):
+                        yield desindent(meth['comment'], 2) + "\n\n"
+                        
+                    # ----- Bottom menu
                     
-                    yield f"```python\n{sdeco}def {mname}{meth['args']}\n```\n\n"
-                    
-                    if ok_comment(meth['comment']):
-                        yield meth['comment'] + "\n\n"
+                    yield f"<sub>Go to [top](#class-{self.name}) - [main](../index.md) - [nodes](nodes.md) - [nodes menus](nodes_menus.md)</sub>\n\n"
+
 
 # ====================================================================================================
 # A module
 
-module_path = "/Users/alain/Documents/blender/scripts/modules/geonodes/"
-
-
 class Module:
     
-    def __init__(self, file_name):
+    def __init__(self, file_name, documented_classes=None):
         self.name      = file_name.split("/")[-1].split(".")[0]
         self.file_name = file_name
         
-        self.parsed     = Parser.FromFile(module_path + file_name).documentation()
+        self.parsed     = Parser.FromFile(file_name).documentation()
         self.class_docs = {}
         
         for class_name, cdoc in self.parsed.items():
             class_doc = ClassDoc(class_name)
             class_doc.add(cdoc)
             self.class_docs[class_name] = class_doc
+
+        self.documented_classes = []
+        if documented_classes is not None:
+            if documented_classes == 'ALL':
+                self.documented_classes = list(self.class_docs.keys())
+            else:
+                self.documented_classes = documented_classes
             
     def __repr__(self):
         return f"module {self.name}\n{pformat(self.class_docs)}\n"
     
-    def inheritance(self, classes, super_classes=None, super_module=None):
+    # ---------------------------------------------------------------------------
+    # Inherits: add properties and methods from other classes
+    
+    def inherits(self, classes, super_classes=None, super_module=None):
         
         module = self if super_module is None else super_module
         
@@ -589,90 +724,37 @@ class Module:
         if super_classes is None:
             super_classes = classes
         elif not isinstance(super_classes, list):
+            
             super_classes = [super_classes] * len(classes)
         
         for class_spec, super_spec in zip(classes, super_classes):
             self.class_docs[class_spec].inherits_from(module.class_docs[super_spec])
             
-    def mark_down(self, class_name):
+    # ---------------------------------------------------------------------------
+    # Add references to inherited properties and methods
+            
+    def add_inheritance(self, classes, super_classes=None, super_module=None):
+        
+        module = self if super_module is None else super_module
+        
+        if not isinstance(classes, list):
+            classes = [classes]
+            
+        if super_classes is None:
+            super_classes = classes
+            
+        elif not isinstance(super_classes, list):
+            super_classes = [super_classes] * len(classes)
+        
+        for class_spec, super_spec in zip(classes, super_classes):
+            self.class_docs[class_spec].add_inheritance(module.class_docs[super_spec].get_inheritance())
+       
+            
+    def markdown(self, class_name):
         return [line for line in self.class_docs[class_name].gen_markdown()]
 
                         
-# ====================================================================================================
-# Build geonodes auto doc
-
-
-def build_geonodes_auto_doc():
-    
-    #arrange     = Module(file_name="core/arrange.py"),
-    #colors      = Module(file_name="core/colors.py"),
-    #context     = Module(file_name="core/context.py"),
-
-    datasockets = Module(file_name="core/datasockets.py")
-    domain      = Module(file_name="core/domain.py")
-    node        = Module(file_name="core/node.py")
-    socket      = Module(file_name="core/socket.py")
-    tree        = Module(file_name="core/tree.py")
-    
-    classes     = Module(file_name="nodes/classes.py")
-    domains     = Module(file_name="nodes/domains.py")
-    
-    print(datasockets)
-    
-    # ----- Datasockets inheritance
-    
-    socket.inheritance('DataSocket', 'Socket')
-    datasockets.inheritance(
-        ['Boolean', 'IntFloat', 'Vector', 'Color', 'String',
-         'Geometry',
-         'Collection', 'Object', 'Material', 'Texture', 'Image'],
-        super_classes = 'DataSocket',
-        super_module  = socket,
-        )
-    datasockets.inheritance(['Float', 'Integer'], 'IntFloat')
-    
-    # ----- Final data classes
-
-    classes.inheritance(
-        ['Boolean', 'Integer', 'Float', 'Vector', 'Color', 'String',
-         'Geometry',
-         'Collection', 'Object', 'Material', 'Texture', 'Image'],
-        super_classes = None,
-        super_module  = datasockets,
-        )
-
-    classes.inheritance(
-        ['Mesh', 'Curve', 'Instances', 'Points', 'Volume'],
-        super_classes = 'Geometry',
-        super_module  = None,
-        )
-    
-    # ----- Nodes inheritance
-    
-    node.inheritance(['Viewer','Frame', 'CustomGroup', 'SceneTime'], 'Node')
-    node.inheritance(['Group','GroupInput', 'GroupOutput'], 'CustomGroup')
-    
-    # ----- Domains inheritance
-    
-    domain.inheritance('Domain', 'Domain', domain)
-    domains.inheritance(
-        ['Vertex', 'Edge', 'Face', 'Corner', 'ControlPoint', 'Spline', 'CloudPoint', 'Instance'],
-        super_classes = 'Domain',
-        super_module  = None
-        )
-    
-    print("".join(classes.mark_down('Vector')))
-    
-    
-    
-                                                       
-                                                       
-                                                      
-        
-                
-build_geonodes_auto_doc()               
-                
-    
+   
     
 def debug():
     text = """

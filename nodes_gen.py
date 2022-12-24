@@ -216,10 +216,13 @@ import bpy
 import mathutils
 from pprint import pprint, pformat
 
+from generator.pyparser import Module
 from generator import code_gen
 
 from importlib import reload
 reload(code_gen)
+
+
 
 
 DEPRECATED = {
@@ -2136,6 +2139,85 @@ from geonodes.core.node import Node
         f.write(f"    nodes = {O}{sdict}{C}\n")
         f.write( "    return nodes[bl_idname](*args, **kwargs)\n\n")
         
+        
+# ====================================================================================================
+# Build geonodes auto doc
+
+def build_geonodes_auto_doc(fpath):
+    
+    #arrange     = Module(fpath + file_name="core/arrange.py"),
+    #colors      = Module(fpath + file_name="core/colors.py"),
+    #context     = Module(fpath + file_name="core/context.py"),
+
+    datasockets = Module(fpath + "core/datasockets.py")
+    domain      = Module(fpath + "core/domain.py")
+    node        = Module(fpath + "core/node.py",      ['Group', 'Frame'])
+    socket      = Module(fpath + "core/socket.py",    ['DataSocket'])
+    tree        = Module(fpath + "core/tree.py",      ['Tree', 'Trees'])
+    
+    classes     = Module(fpath + "nodes/classes.py",  'ALL')
+    domains     = Module(fpath + "nodes/domains.py",  'ALL')
+    
+    class_docs  = Module(fpath + "core/class_docs.py")
+    
+    modules = [datasockets, domain, node, socket, tree, classes, domains]
+    
+    # ----- Complementory doc
+    
+    classes.inherits(['Mesh', 'Curve', 'Points', 'Instances', 'Volume'], None, class_docs)
+    domains.inherits(['Vertex', 'Edge', 'Face', 'Corner', 'ControlPoint', 'Spline', 'CloudPoint'], None, class_docs)
+    
+    # ----- Datasockets inherits
+    
+    socket.inherits('DataSocket', 'Socket')
+    datasockets.add_inheritance(
+        ['Boolean', 'IntFloat', 'Vector', 'Color', 'String',
+         'Geometry',
+         'Collection', 'Object', 'Material', 'Texture', 'Image'],
+        super_classes = 'DataSocket',
+        super_module  = socket,
+        )
+    datasockets.inherits(['Float', 'Integer'], 'IntFloat')
+    
+    # ----- Final data classes
+
+    classes.inherits(
+        ['Boolean', 'Integer', 'Float', 'Vector', 'Color', 'String',
+         'Geometry',
+         'Collection', 'Object', 'Material', 'Texture', 'Image'],
+        super_classes = None,
+        super_module  = datasockets,
+        )
+
+    classes.inherits(
+        ['Mesh', 'Curve', 'Instances', 'Points', 'Volume'],
+        super_classes = 'Geometry',
+        super_module  = None,
+        )
+    
+    # ----- Nodes inherits
+    
+    node.inherits(['Viewer','Frame', 'CustomGroup', 'SceneTime'], 'Node')
+    node.inherits(['Group','GroupInput', 'GroupOutput'], 'CustomGroup')
+    
+    # ----- Domains inherits
+    
+    domains.inherits('Domain', 'Domain', domain)
+    domains.inherits(
+        ['Vertex', 'Edge', 'Face', 'Corner', 'ControlPoint', 'Spline', 'CloudPoint', 'Instance'],
+        super_classes = 'Domain',
+        super_module  = None
+        )
+    
+    
+    # ----- Update the documentation
+    
+    for module in modules:
+        for class_name in module.documented_classes:
+            #print(f"Documentation of {class_name}")
+            with open(fpath + f"docs/api/{class_name}.md", 'w') as f:
+                f.writelines(module.markdown(class_name))
+                
                     
 # ====================================================================================================
 # Generate the nodes module
@@ -2169,7 +2251,8 @@ def create_geonodes(fpath):
     
     print("Create documentation...")
 
-    cg.create_api_doc(fpath)
+    cg.create_nodes_menus(fpath)
+    build_geonodes_auto_doc(fpath)               
     
     print("Create test file...")
 
@@ -2188,205 +2271,7 @@ def create_geonodes(fpath):
     print("in the geometry nodes editor and then back to the script editor.")
     print("Lauch generator.node_sizes() WITHOUT LAUNCHING create_geonodes AGAIN!")
     print("... hope it works.")
-    
-    
-    return
 
-
-
-
-
-
-
-
-    
-
-
-
-        
-        
-        
-        
-        
-        
-    # ---------------------------------------------------------------------------
-    # The field nodes are implemented in domains.py
-    # We must load the documentation from the file to enrich the
-    # references to the nodes
-    
-    # ----- Parse domains.py
-    
-    FIELDS = set()
-    
-    parsed_domains = Parser.FromFile(fpath + "core/domains.py").documentation()
-    for class_name, cdoc in parsed_domains.items():
-        for name, fdoc in cdoc.funcs.items():
-        
-            def repl(m):
-                blid = m.group(2)
-                FIELDS.add(blid)
-                wn = WNode.WNODES[blid]
-                
-                wn.register_socket(class_name, name, 'Fields')
-                
-                lines = [
-                    f" > Field [{wn.node_name}](/docs/nodes/{wn.node_name}.md)",
-                     "",
-                    f"Blender menu : **{NODES_MENU[wn.blender_ref_name][1]}**<br>",
-                    f"<sub>go to [top](#class-{class_name.lower().replace(' ', '-')}) [index](ref:index)</sub>",
-                    ]
-                return "\n".join(lines)
-            
-            fdoc.comment = re.sub(r"(<\s*field\s+([^>]+)>)", repl, fdoc.comment)
-    
-    # ---------------------------------------------------------------------------
-    # data sockets classes
-    
-    if False:
-        print("Creating data sockets...")
-        create_data_sockets(fpath)
-
-    # ---------------------------------------------------------------------------
-    # nodes.py
-
-    print("Creating geometry nodes from Blender...")
-
-    create_nodes(fpath, BNODES)
-
-    # ---------------------------------------------------------------------------
-    # Documentation
-
-    print("Documentation...")
-    
-    # ----- Parse node.py
-    
-    node_doc = Parser.FromFile(fpath + "core/node.py").documentation()
-    
-    for name in ["DataSocket", "Tree", "Node"]:
-        section = Section.FromParserDoc(parent=core_doc, prefix = "Class", pdoc=node_doc[name])
-        section.id = name
-        section.md_file = f"{name}.md"
-    
-    for name in ["CustomGroup", "Group", "GroupInput", "GroupOutput", "Viewer", "Frame", "SceneTime"]:
-        section = Section.FromParserDoc(parent=nodes_doc, prefix = "Node", pdoc=node_doc[name])
-        section.id = name
-        section.md_file = f"{name}.md"
-
-    # ----- Parse datasockets.py
-    
-    ds_doc = Parser.FromFile(fpath + "core/datasockets.py").documentation()
-    
-    for section in sockets_doc:
-        
-        fname = fpath + section.file_link
-        with open(fname, 'w') as f:
-            for line in section.gen_text(True):
-                f.write(line + "\n")
-
-    # ----- Parse domains.py
-        
-    for name in ["Domain", "Vertex", "Edge", "Face", "Corner", "ControlPoint", "Spline", "CloudPoint", "Instance"]:
-        section = Section.FromParserDoc(parent=core_doc, prefix = "Class", pdoc=parsed_domains[name])
-        section.id = name
-        section.md_file = f"{name}.md"
-        
-    # ----- Core
-    # Core documentation enrich the list of nodes references
-
-    for section in core_doc:
-        text = "\n".join(section.gen_text(True))
-        text = re.sub(r"(<\s*field\s+([^>]+)>)", repl, text)
-        
-        fname = fpath + section.file_link
-        with open(fname, 'w') as f:
-            f.write(text)
-                
-    # ----- Nodes
-
-    print("Nodes documentation...")
-
-    for section in nodes_doc:
-        
-        fname = fpath + section.file_link
-        with open(fname, 'w') as f:
-            for line in section.gen_text(True):
-                f.write(line + "\n")
-
-    # ----- Index
-
-    print("Index...")
-    
-    fname = fpath + f"docs/index.md"
-    with open(fname, 'w') as f:
-        f.write("\n# Index\n\n")
-        
-        for section in package_doc.get_sections():
-            f.write(f"\n## {section.title}\n\n")
-            
-            for line in section.gen_toc(depth=1, sort=True, classify=None, markdown=True):
-                f.write(line + "\n")
-                
-    # ----- Implemented nodes
-    
-    print("Done\n")
-    
-    print("Nodes not implemented as socket methods:")
-    count = 0
-    for bnode in BNODES.values():
-        if (bnode.bl_idname not in gsock.DataClass.GENS) and (bnode.bl_idname not in FIELDS):
-            print(f"    {bnode.bl_idname:40s}: '{bnode.name}'")
-            count += 1
-            
-    if count == 0:
-        print("   all (ok)")
-    else:
-        print(f"\n   NOTE: Check if the {count} node{'s' if count > 1 else ''} should be implemented as methods.\n")
-        
-    print('Generation completed')
-    print()
-    print('-'*80)
-    print("NOTE: if new nodes are created, don't forget to run node_sizes():")
-    print("Node dimensions are intizalized to zero. To update the property correctly, go")
-    print("in the geometry nodes editor and then back to the script editor.")
-    print("Lauch generator.node_sizes() WITHOUT LAUNCHING create_geonodes AGAIN!")
-    print("... hope it works.")
-    
-    
-    return
-    
-    # ---------------------------------------------------------------------------
-    # Index
-    
-    doc = gd.Section("Index", level=0)
-
-    section = doc.get_subsection("Data sockets")
-    
-    lst = gd.List()
-    for class_name in generated_sockets:
-        lst.add_item(gd.Text(gd.Link(class_name, f"sockets/{class_name}.md")))
-
-    section.append(lst)
-        
-    
-    section = doc.get_subsection("Nodes")
-
-    lst = gd.List()
-    for node_name in generated_nodes:
-        lst.add_item(gd.Text(gd.Link(node_name, f"nodes/{node_name}.md")))
-
-    section.append(lst)
-    
-    
-    fname = fpath + f"docs/index.md"
-    with open(fname, 'w') as f:
-        for line in doc.gen_md():
-            f.write(line + "\n")
-            
-    # ---------------------------------------------------------------------------
-    # Done
-    
-    print("geondes files generated")
-    
 # ====================================================================================================
 # Generate the nodes module
                     

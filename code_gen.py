@@ -80,7 +80,7 @@ class Generator:
         self.ret_socket   = None                # socket to return, returns node if None. Can be a tuple
         self.ret_class    = None                # type of the return socket. Ignore if socket is None. must be a tuple if ret_socket is tuple.
         self.cache        = False               # use a cache for the node
-        self.dtype        = None                # (data_type, value, color_domain) implements: data_type = self.value_data_type(argument, data_type, color_domain)
+        self.dtype        = None                # (data_type, value, color) implements: data_type = self.value_data_type(argument, data_type, color)
         
         self.is_domain    = False               # domain method
         
@@ -190,7 +190,102 @@ class Generator:
         else:
             return self.header
     
+
+    # ====================================================================================================
+    # Source code generation
+    #
+    # - Comment / documentation
+    # - pyhon code    
+
+    # ----------------------------------------------------------------------------------------------------
+    # Anchor
     
+    def anchor(self, node):
+        s = self.fname(node)
+        if self.decorator is not None:
+            if self.decorator != "setter":
+                if False:
+                    s += f"-{self.decorator[1:]}"
+        return s
+    
+    # ----------------------------------------------------------------------------------------------------
+    # Generate the comments
+    
+    def gen_markdown(self, node):
+        
+        s = self.fname(node)
+        if self.decorator is not None:
+            if self.decorator == 'setter':
+                yield
+                
+            s += f' <sub>*{self.decorator[1:]}*</sub>'
+            
+        if False:
+            yield f"## {s}\n\n"
+            
+            yield "```python\n"
+            yield f"{self.call_string(node)}\n\n"
+            yield "```\n"
+        
+        if node is not None:
+            yield f"> Node: [{node.bnode.name}]({node.bl_idname}.md) | [Blender reference]({node.blender_ref}) | [api reference]({node.blender_python_ref})\n\n"
+        
+        if self.com_descr is not None:
+            yield self.com_descr + "\n\n"
+
+        # ----- Arguments
+            
+        if self.com_args is None:
+            ok_arg = False
+            for arg in node.get_node_arguments():
+                if not arg.name in self.kwargs.keys():
+                    if not ok_arg:
+                        yield f"#### Args:\n"
+                        ok_arg = True
+                    yield f"- {arg.scomment(**self.kwargs)}\n"
+    
+            if ok_arg:
+                yield "\n"
+                
+        else:
+            if len(self.com_args):
+                yield f"#### Args:\n"
+                for line in self.com_args:
+                    yield f"- {line }\n"
+                yield "\n"
+                
+        # ----- Returns
+        
+        if isinstance(self.ret_socket, tuple):
+            yield f"![Node Image]({node.node_image_ref})\n\n"
+        
+        if self.com_ret is None:
+            if self.decorator != 'setter':
+                yield f"#### Returns:\n"
+                if self.ret_socket is None:
+                    if self.stack:
+                        yield "- self\n"
+                    else:
+                        yield f"- node with sockets {list(node.outputs.unames.keys())}\n"
+                    
+                elif isinstance(self.ret_socket, tuple):
+                    sr = tuple([f"`{rs}`" for rs in self.ret_socket])
+                    yield f"- tuple {sr}\n"
+                    
+                else:
+                    yield f"- socket `{self.ret_socket}`"
+                    if self.ret_class is None or self.ret_class == 'cls':
+                        yield "\n"
+                    else:
+                        yield f" of class {self.ret_class}\n"
+        else:
+            if self.com_ret != "":
+                yield f"#### Returns:\n"
+                for line in self.com_ret.split('\n'):
+                    yield f"- {line}\n"    
+                    
+        yield "\n"
+
     # ----------------------------------------------------------------------------------------------------
     # Generate the source code
         
@@ -237,67 +332,83 @@ class Generator:
         # ----------------------------------------------------------------------------------------------------
         # Documentation
         
-        # ----- Header
-        
-        yield self.indent(1) + f'""" Node {node.node_name}.\n\n'
-        yield self.indent(1) + f"Node reference [{node.bnode.name}]({node.blender_ref})\n"
-        yield self.indent(1) + f"Developer reference [{node.bl_idname}]({node.blender_python_ref})\n\n"
-        
-        if self.com_descr is not None:
-            for line in self.com_descr.split('\n'):
-                yield self.indent(1) + line + "\n"
-            yield "\n"
-
-        # ----- Arguments
+        if True:
+            text = ""
+            for line in self.gen_markdown(node):
+                if line is not None:
+                    text += line 
+            lines = text.split("\n")
+            del text
             
-        if self.com_args is None:
-            ok_arg = False
-            for arg in node.get_node_arguments():
-                if not arg.name in self.kwargs.keys():
-                    if not ok_arg:
-                        yield self.indent(1) + f"Args:\n"
-                        ok_arg = True
-                    yield self.indent(2) + f"{arg.scomment(**self.kwargs)}\n"
-    
-            if ok_arg:
-                yield "\n"
-                
-        else:
-            if len(self.com_args):
-                yield self.indent(1) + f"Args:\n"
-                for line in self.com_args:
-                    yield self.indent(2) + line + "\n"
-                yield "\n"
-                
-        # ----- Returns
-        
-        if self.com_ret is None:
-            if self.decorator != 'setter':
-                yield self.indent(1) + f"Returns:\n"
-                
-                if self.ret_socket is None:
-                    yield self.indent(2) + f"node with sockets {list(node.outputs.unames.keys())}\n"
-                    
-                elif isinstance(self.ret_socket, tuple):
-                    yield self.indent(2) + f"tuple {self.ret_socket}\n"
-                    
+            yield self.indent(1) + '"""\n\n'    
+            for line in lines:
+                if line == "":
+                    yield "\n"
                 else:
-                    yield self.indent(2) + f"socket `{self.ret_socket}`"
-                    if self.ret_class is None or self.ret_class == 'cls':
-                        yield "\n"
-                    else:
-                        yield f" [{self.ret_class}]({self.ret_class}.md)\n"
-                        
-        else:
-            if self.com_ret != "":
-                yield self.indent(1) + f"Returns:\n"
-                for line in self.com_ret.split('\n'):
                     yield self.indent(1) + line + "\n"
+            yield self.indent(1) + '"""\n\n'
+            
+        else:
+            # ----- Header
+            
+            yield self.indent(1) + f'""" Node {node.node_name}.\n\n'
+            yield self.indent(1) + f"Node reference [{node.bnode.name}]({node.blender_ref})\n"
+            yield self.indent(1) + f"Developer reference [{node.bl_idname}]({node.blender_python_ref})\n\n"
+            
+            if self.com_descr is not None:
+                for line in self.com_descr.split('\n'):
+                    yield self.indent(1) + line + "\n"
+                yield "\n"
+    
+            # ----- Arguments
+                
+            if self.com_args is None:
+                ok_arg = False
+                for arg in node.get_node_arguments():
+                    if not arg.name in self.kwargs.keys():
+                        if not ok_arg:
+                            yield self.indent(1) + f"Args:\n"
+                            ok_arg = True
+                        yield self.indent(2) + f"{arg.scomment(**self.kwargs)}\n"
+        
+                if ok_arg:
+                    yield "\n"
                     
-        # ----- Done
+            else:
+                if len(self.com_args):
+                    yield self.indent(1) + f"Args:\n"
+                    for line in self.com_args:
+                        yield self.indent(2) + line + "\n"
+                    yield "\n"
                     
-        yield self.indent(1) + '"""\n'
-
+            # ----- Returns
+            
+            if self.com_ret is None:
+                if self.decorator != 'setter':
+                    yield self.indent(1) + f"Returns:\n"
+                    
+                    if self.ret_socket is None:
+                        yield self.indent(2) + f"node with sockets {list(node.outputs.unames.keys())}\n"
+                        
+                    elif isinstance(self.ret_socket, tuple):
+                        yield self.indent(2) + f"tuple {self.ret_socket}\n"
+                        
+                    else:
+                        yield self.indent(2) + f"socket `{self.ret_socket}`"
+                        if self.ret_class is None or self.ret_class == 'cls':
+                            yield "\n"
+                        else:
+                            yield f" [{self.ret_class}]({self.ret_class}.md)\n"
+                            
+            else:
+                if self.com_ret != "":
+                    yield self.indent(1) + f"Returns:\n"
+                    for line in self.com_ret.split('\n'):
+                        yield self.indent(1) + line + "\n"
+                        
+            # ----- Done
+                        
+            yield self.indent(1) + '"""\n'
             
         # ----------------------------------------------------------------------------------------------------
         # Body
@@ -347,7 +458,7 @@ class Generator:
  
         if self.dtype is not None:
             if len(self.dtype) > 2:
-                scolor = f", color_domain={self.dtype[2]}"
+                scolor = f", color={self.dtype[2]}"
             else:
                 scolor = ""
             yield self.indent(1) + f"{self.dtype[0]}_ = self.value_data_type({self.dtype[1]}, {default_data_type}{scolor})\n"
@@ -481,14 +592,7 @@ class Generator:
     # ----------------------------------------------------------------------------------------------------
     # Generate api documentation
     
-    def anchor(self, node):
-        s = self.fname(node)
-        if self.decorator is not None:
-            if self.decorator != "setter":
-                s += f"-{self.decorator[1:]}"
-        return s
-    
-    def gen_api_doc(self, node):
+    def gen_api_doc_OLD(self, node):
         
         s = self.fname(node)
         if self.decorator is not None:
@@ -917,93 +1021,93 @@ class ClassGenerator(dict):
     # ----------------------------------------------------------------------------------------------------
     # Create the api documentation
     
-    def create_api_doc(self, folder):
+    def create_nodes_menus(self, folder):
         
         nav_menu = "[main](../index.md) - [nodes](nodes.md) - [nodes menus](nodes_menus.md)"
         doc_header = f"> {nav_menu}\n\n"
         
-        print("Data classes api...")
-        
-        # ----------------------------------------------------------------------------------------------------
-        # Classes documentation
-        
-        for class_name in self:
+        if False:
+            print("Data classes api...")
             
             # ----------------------------------------------------------------------------------------------------
-            # Read the global and final description
+            # Classes documentation
             
-            try:
-                descr_file_name = f"{folder}docs/{class_name}.md"
-                with open(descr_file_name, 'r') as f:
-                    descr = f.readlines()
-            except:
-                descr = None
+            for class_name in self:
                 
-            try:
-                ex_file_name = f"{folder}docs/examples_{class_name}.md"
-                with open(ex_file_name, 'r') as f:
-                    examples = f.readlines()
-            except:
-                examples = None
+                # ----------------------------------------------------------------------------------------------------
+                # Read the global and final description
                 
-            # ----------------------------------------------------------------------------------------------------
-            # Read the global and final description
-
-            file_name = f"{folder}docs/api/{class_name}.md"
-
-            with open(file_name, 'w') as f:
-                if class_name == 'function':
-                    f.write("# Functions\n\n")
-                else:
-                    f.write(f"# class {class_name}\n\n")
+                try:
+                    descr_file_name = f"{folder}docs/{class_name}.md"
+                    with open(descr_file_name, 'r') as f:
+                        descr = f.readlines()
+                except:
+                    descr = None
                     
-                f.write(doc_header)
-                
-                # ----- Description
-                
-                if descr is not None:
-                    f.writelines(descr)
+                try:
+                    ex_file_name = f"{folder}docs/examples_{class_name}.md"
+                    with open(ex_file_name, 'r') as f:
+                        examples = f.readlines()
+                except:
+                    examples = None
                     
-                if examples is not None:
-                    f.write("> see [examples](#examples)\n\n")
-                    
-                # ----- TOC
-                
-                methods = self.class_methods(class_name)
-                
-                for deco, title in zip(["@property", "@classmethod", "@staticmethod", None], ["Properties", "Class methods", "Static methods", "Methods"]):
-                    
-                    ok_title = False
-                    for _, gen, wnode in methods:
-                        if gen.decorator != deco:
-                            continue
+                # ----------------------------------------------------------------------------------------------------
+                # Read the global and final description
+    
+                file_name = f"{folder}docs/api/{class_name}.md"
+    
+                with open(file_name, 'w') as f:
+                    if class_name == 'function':
+                        f.write("# Functions\n\n")
+                    else:
+                        f.write(f"# class {class_name}\n\n")
                         
-                        if not ok_title:
-                            f.write(f"## {title}\n\n")
-                            ok_title = True                             
+                    f.write(doc_header)
+                    
+                    # ----- Description
+                    
+                    if descr is not None:
+                        f.writelines(descr)
+                        
+                    if examples is not None:
+                        f.write("> see [examples](#examples)\n\n")
+                        
+                    # ----- TOC
+                    
+                    methods = self.class_methods(class_name)
+                    
+                    for deco, title in zip(["@property", "@classmethod", "@staticmethod", None], ["Properties", "Class methods", "Static methods", "Methods"]):
+                        
+                        ok_title = False
+                        for _, gen, wnode in methods:
+                            if gen.decorator != deco:
+                                continue
                             
-                        f.write(f"- [{gen.fname(wnode)}](#{gen.anchor(wnode)})\n")
-                        
-                    f.write("\n")
-                
-                # ----- Documentation
-                
-                for _, gen, wnode in methods:
-                    ok_lines = False
-                    for line in gen.gen_api_doc(wnode):
-                        if line is not None:
-                            f.write(line.replace('CLASS_NAME', class_name))
-                            ok_lines = True
+                            if not ok_title:
+                                f.write(f"## {title}\n\n")
+                                ok_title = True                             
+                                
+                            f.write(f"- [{gen.fname(wnode)}](#{gen.anchor(wnode)})\n")
                             
-                    if ok_lines:
-                        f.write(f"<sub>Go to [top](#class-{class_name}) - {nav_menu}</sub>\n\n")
-                        
-                # ----- Examples
-                
-                if examples is not None:
-                    f.writelines(examples)
-                
-                
+                        f.write("\n")
+                    
+                    # ----- Documentation OLD
+                    
+                    if False:
+                        for _, gen, wnode in methods:
+                            ok_lines = False
+                            for line in gen.gen_api_doc(wnode):
+                                if line is not None:
+                                    f.write(line.replace('CLASS_NAME', class_name))
+                                    ok_lines = True
+                                    
+                            if ok_lines:
+                                f.write(f"<sub>Go to [top](#class-{class_name}) - {nav_menu}</sub>\n\n")
+                            
+                    # ----- Examples
+                    
+                    if examples is not None:
+                        f.writelines(examples)
                         
         # ----------------------------------------------------------------------------------------------------
         # Nodes are listed in alphabetical order and in the Blender add menu order
@@ -1238,15 +1342,16 @@ class ClassGenerator(dict):
         # ----------------------------------------------------------------------------------------------------
         # Copy files from docs to docs/api
         
-        for fname in ['Tree.md', 'Trees.md']:
-            fsource = folder + 'docs/' + fname
-            ftarget = folder + 'docs/api/' + fname
-            
-            with open(fsource, 'r') as f:
-                text = f.readlines()
+        if False:
+            for fname in ['Tree.md', 'Trees.md']:
+                fsource = folder + 'docs/' + fname
+                ftarget = folder + 'docs/api/' + fname
                 
-            with open(ftarget, 'w') as f:
-                f.writelines(text)
+                with open(fsource, 'r') as f:
+                    text = f.readlines()
+                    
+                with open(ftarget, 'w') as f:
+                    f.writelines(text)
                 
                 
             
@@ -1339,9 +1444,9 @@ COMMENTS = {
                             "Later, use the snake_case version of the name to read the socket from the [Group](Group.md) node.\n\n"+
                             "- Let's create an output socket named " + '"Result"' + ' in the current tree named "Geometry Nodes": `value.to_output("Result")`\n'+
                             '- In another tree, the previous tree can be created as custom group: `res = Group("Geometry Nodes", **kwargs).result`\n\n'
-                            "See [Group](Group.md) and [Trees](Trees.md) for more detail.\n\n"
+                            "See [Group](Group.md) and [Trees](Trees.md) for more detail.\n\n",
                 com_args  =[
-                    'name: name of the group output socket to create,
+                    'name: name of the group output socket to create',
                     ],
                 com_ret   = "None"),
     }
@@ -1503,23 +1608,24 @@ COLOR = {
             Function(fname='separate_hsv', ret_socket=('red', 'green', 'blue', 'alpha'), mode="'HSV'"),
             Function(fname='separate_hsl', ret_socket=('red', 'green', 'blue', 'alpha'), mode="'HSL'"),
                      ],
-        'Color'   : [
-            Property(fname='rgb', ret_socket=('red', 'green', 'blue', 'alpha'), color='self', mode="'RGB'"),
-            Property(fname='hsv', ret_socket=('red', 'green', 'blue', 'alpha'), color='self', mode="'HSV'"),
-            Property(fname='hsl', ret_socket=('red', 'green', 'blue', 'alpha'), color='self', mode="'HSL'"),
+        # Implemented manually to manage cache
+        #'Color'   : [
+        #    Property(fname='rgb', ret_socket=('red', 'green', 'blue', 'alpha'), color='self', mode="'RGB'"),
+        #    Property(fname='hsv', ret_socket=('red', 'green', 'blue', 'alpha'), color='self', mode="'HSV'"),
+        #    Property(fname='hsl', ret_socket=('red', 'green', 'blue', 'alpha'), color='self', mode="'HSL'"),
             
-            Property(color='self', mode="'RGB'", fname='alpha',   ret_socket='alpha'),
+        #    Property(color='self', mode="'RGB'", fname='alpha',   ret_socket='alpha'),
             
-            Property(color='self', mode="'RGB'", fname='red',        ret_socket='red'),
-            Property(color='self', mode="'RGB'", fname='green',      ret_socket='green'),
-            Property(color='self', mode="'RGB'", fname='blue',       ret_socket='blue'),
+        #    Property(color='self', mode="'RGB'", fname='red',        ret_socket='red'),
+        #    Property(color='self', mode="'RGB'", fname='green',      ret_socket='green'),
+        #    Property(color='self', mode="'RGB'", fname='blue',       ret_socket='blue'),
             
-            Property(color='self', mode="'HSV'", fname='hue',        ret_socket='red'),
-            Property(color='self', mode="'HSV'", fname='saturation', ret_socket='green'),
-            Property(color='self', mode="'HSV'", fname='value',      ret_socket='blue'),
+        #    Property(color='self', mode="'HSV'", fname='hue',        ret_socket='red'),
+        #    Property(color='self', mode="'HSV'", fname='saturation', ret_socket='green'),
+        #    Property(color='self', mode="'HSV'", fname='value',      ret_socket='blue'),
             
-            Property(color='self', mode="'HSL'", fname='lightness',  ret_socket='blue'),
-            ],
+        #    Property(color='self', mode="'HSL'", fname='lightness',  ret_socket='blue'),
+        #    ],
     },
 }
 
@@ -1713,12 +1819,12 @@ CURVE_PRIMITIVES = {
         ],
     },
     'GeometryNodeCurvePrimitiveBezierSegment': {
-        'Curve': Constructor(fname='bezier_segment', ret_socket='curve'),
+        'Curve': Constructor(fname='BezierSegment', ret_socket='curve'),
     },
     'GeometryNodeCurvePrimitiveCircle': {
         'Curve': [
             Constructor(fname='Circle', ret_socket='curve', mode="'RADIUS'", point_1=None, point_2=None, point_3=None),
-            Constructor(fname='CircleFromPoints', mode="'POINTS'", radius=None),
+            Static(fname='CircleFromPoints', ret_socket=('curve', 'center'), ret_class=('Curve', None), mode="'POINTS'", radius=None),
             ],
     },
     'GeometryNodeCurvePrimitiveLine': {
@@ -1895,11 +2001,11 @@ INPUT = {
     },
     'GeometryNodeObjectInfo': {
         'Object': [
-            Method(fname='info'),
-            Method(fname='location', ret_socket='location'),
-            Method(fname='rotation', ret_socket='rotation'),
-            Method(fname='scale', ret_socket='scale'),
-            Method(fname='geometry', ret_socket='geometry'),
+            Method(fname='info', object='self'),
+            Method(fname='location', ret_socket='location', object='self'),
+            Method(fname='rotation', ret_socket='rotation', object='self'),
+            Method(fname='scale',    ret_socket='scale',    object='self'),
+            Method(fname='geometry', ret_socket='geometry', object='self'),
             ]
     },
     'GeometryNodeSelfObject': {
@@ -2016,7 +2122,7 @@ MATERIAL = {
     },
     'GeometryNodeInputMaterialIndex': {
         'Geometry': PropAttribute(ret_socket='material_index'),
-        'Domain':   DomPropAttribute(ret_socket='material_index'),
+        ('Face', 'Spline'): DomPropAttribute(ret_socket='material_index'),
     },
     'GeometryNodeMaterialSelection': {
         'Geometry': Attribute(ret_socket='selection'),
@@ -2032,7 +2138,10 @@ MATERIAL = {
     },
     'GeometryNodeSetMaterialIndex': {
         'Geometry': StackMethod(geometry='self'),
-        'Domain':   DomStackMethod(geometry='self'),
+        ('Face', 'Spline'): [
+            DomStackMethod(geometry='self'),
+            DomSetter(fname='material_index', geometry='self', material_index='attr_value'),
+            ]
     },
 }
 
@@ -2207,10 +2316,9 @@ MESH_PRIMITIVES = {
             Constructor(fname='Line',                    ret_socket='mesh'),
             Constructor(fname='LineEndPoints',           ret_socket='mesh', mode="'END_POINTS'", count_mode="'TOTAL'",      resolution=None,
                         arg_rename={'offset': 'end_location'}),
-            Constructor(fname='LineOffset',              ret_socket='mesh', mode="'OFFSET'",     count_mode="'TOTAL'",      resolution=None),
             Constructor(fname='LineEndPointsResolution', ret_socket='mesh', mode="'END_POINTS'", count_mode="'RESOLUTION'", count=None,
                         arg_rename={'offset': 'end_location'}),
-            Constructor(fname='LineOffsetResolution',    ret_socket='mesh', mode="'OFFSET'",     count_mode="'RESOLUTION'", count=None),
+            Constructor(fname='LineOffset',              ret_socket='mesh', mode="'OFFSET'",     count_mode="'TOTAL'",      resolution=None),
             ],
     },
     'GeometryNodeMeshUVSphere': {
@@ -2428,7 +2536,10 @@ UTILITIES = {
     },
     'FunctionNodeAlignEulerToVector': {
         'function': Function(ret_socket='rotation'),
-        'Vector':   StackMethod(rotation='self'),
+        'Vector':   [
+            StackMethod(rotation='self'),
+            Constructor(fname="AlignToVector", rotation=None, ret_socket='rotation'),
+            ]
         #'Rotation': StackMethod(rotation='self', fname='align_to_vector'),
     },
     'FunctionNodeBooleanMath': {
@@ -2785,6 +2896,11 @@ UTILITIES = {
             DomAttribute(ret_socket='value', fname='random_vector',  data_type="'FLOAT_VECTOR'", probability=None),
             DomAttribute(ret_socket='value', fname='random_boolean', data_type="'BOOLEAN'",      min=None, max=None),
             ],
+        'Boolean': Constructor(fname='Random', ret_socket='value', data_type="'BOOLEAN'",      min=None, max=None),
+        'Integer': Constructor(fname='Random', ret_socket='value', data_type="'IN'",           probability=None),
+        'Float'  : Constructor(fname='Random', ret_socket='value', data_type="'FLOAT'",        probability=None),
+        'Vector' : Constructor(fname='Random', ret_socket='value', data_type="'FLOAT_VECTOR'", probability=None),
+        
         
     },
     'FunctionNodeRotateEuler': {
@@ -2846,11 +2962,12 @@ VECTOR = {
         'Vector': Constructor(fname='Combine', ret_socket='vector'),
     },
     'ShaderNodeSeparateXYZ': {
+        # Implemented manually to manage cache
         'Vector': [
             Property(fname='separate', cache=True, vector='self'),
-            #Property(fname='x', cache=True, vector='self', ret_socket='x'),
-            #Property(fname='y', cache=True, vector='self', ret_socket='y'),
-            #Property(fname='z', cache=True, vector='self', ret_socket='z'),
+        #    #Property(fname='x', cache=True, vector='self', ret_socket='x'),
+        #    #Property(fname='y', cache=True, vector='self', ret_socket='y'),
+        #    #Property(fname='z', cache=True, vector='self', ret_socket='z'),
             ],
     },
     'ShaderNodeVectorCurve': {
