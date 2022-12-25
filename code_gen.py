@@ -99,7 +99,11 @@ class Generator:
         # ----------------------------------------------------------------------------------------------------
         # Key word arguments either initialize attributes or are Node arguments
         
+        ok_self_value = False
         for k, v in kwargs.items():
+            if v == 'self':
+                ok_self_value = True
+                
             if k in ['fname', 'indent']:
                 k += '_'
                 
@@ -107,6 +111,13 @@ class Generator:
                 setattr(self, k, v)
             else:
                 self.kwargs[k] = v
+                
+        if not ok_self_value:
+            if type(self).__name__ not in ['Function', 'Constructor', 'Static', 'Source', 'PropReadError', 'Comment']:
+                print(f"CAUTION: Methode '{self.fname_}' doesn't use self ({type(self).__name__}")
+                for k, v in kwargs.items():
+                    print(f"   {k:15s}: {v}")
+                print()
                 
         # ----------------------------------------------------------------------------------------------------
         # For domain methods:
@@ -2001,11 +2012,11 @@ INPUT = {
     },
     'GeometryNodeObjectInfo': {
         'Object': [
-            Method(fname='info', object='self'),
-            Method(fname='location', ret_socket='location', object='self'),
-            Method(fname='rotation', ret_socket='rotation', object='self'),
-            Method(fname='scale',    ret_socket='scale',    object='self'),
-            Method(fname='geometry', ret_socket='geometry', object='self'),
+            Method(fname='info', object='self.bobject'),
+            Method(fname='location', ret_socket='location', object='self.bobject'),
+            Method(fname='rotation', ret_socket='rotation', object='self.bobject'),
+            Method(fname='scale',    ret_socket='scale',    object='self.bobject'),
+            Method(fname='geometry', ret_socket='geometry', object='self.bobject'),
             ]
     },
     'GeometryNodeSelfObject': {
@@ -2092,7 +2103,7 @@ INSTANCES = {
         
     },
     'GeometryNodeRealizeInstances': {
-        'Instances': Method(fname='realize', ret_socket='geometry'),
+        'Instances': Method(fname='realize', geometry='self' ,ret_socket='geometry'),
     },
     'GeometryNodeRotateInstances': {
         'Instances': StackMethod(fname='rotate', instances='self'),
