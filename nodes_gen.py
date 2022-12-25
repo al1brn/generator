@@ -726,7 +726,6 @@ class Argument:
                 s += "*"
             return s + f"{self.wsocket.uname})"
         
-        
 # ---------------------------------------------------------------------------
 # A list of Arguments
 
@@ -853,11 +852,62 @@ class Arguments(list):
                 
         return text
     
-    # ====================================================================================================
-    # Implementation in classes or function
-    # 
-    # keys of kwargs represent argument with a initial value different from default
-    # In the case the argument is not put in the list
+    # ====================================================================================================    
+    # DataClass and Domain methods implementing Nodes
+    #
+    # - method_header         : returns the header of the DataClass method
+    # - method_call_arguments = returns the arguments for node creation
+    #
+    # The basic idea is the following
+    #
+    # DataSocket or Domain level
+    # --------------------------
+    # def method(self, **kwargs):
+    #
+    # Node level
+    # ----------
+    # node = Node(key = key for key in kwargs)
+    #
+    # In actual implementation, some changes are possible
+    #
+    # 1) 'self' can be a value of a node argument
+    #    def set_position(self, ...) --> node = SetPosition(geometry=self, ...)
+    #
+    #    Some arguments are not in the DataSocket method but are computed by the DataSocket instance
+    #    This for instance the case for Domain methods which keep a selection value:
+    #    def set_shade_smooth(...) --> node = SetPosition(..., selection=self.selection, ...)
+    #
+    #    RULE 1
+    #    ------
+    #
+    #    Arguments in fixed_args dictionary:
+    #    - don't appear in the method header
+    #    - are implemented key=value in the node call
+    #
+    # 2) Some arguments can be renamed when exposed in the domain method:
+    #    def add(self, value=None) --> node = Math(operation='ADD', value0=self, value1=value)
+    #
+    #    RULE 2
+    #    ------
+    #
+    #    An optional rename dictionary is provided with: node_name: method_name entries
+    #
+    # 3) Some operations can be required on argument before being passed to the node creation
+    #    def sample_index(..., index=None, ...) --> node = SampleIndex(..., index=self.index_for_sample(index), ...)
+    #
+    #    The function call can't be passed in the fixed_args dictionary because the argument wouln't appear
+    #    in the method call. We need another rule:
+    #
+    #    RULE 3
+    #    ------
+    #
+    #    Keys named {arg_name}_VALUE give the value to use when calling the node rather than the arg_name.
+    #
+    #    For the example above, the fixed_args must contain the entry:
+    #    'index_VALUE': 'self.index_for_sample(index)
+    
+    # ----------------------------------------------------------------------------------------------------
+    # RULE 2 - Extract the arg_rename dictionary
     
     @staticmethod
     def extract_arg_rename(**kwargs):
@@ -882,7 +932,7 @@ class Arguments(list):
         
         vals = []
         
-        # ----- Extract the arg_rename dict
+        # ----- RULE 2 - extract the arg_rename dict
         
         fixed_args, arg_rename = self.extract_arg_rename(**kwargs)
             
@@ -922,14 +972,25 @@ class Arguments(list):
     
     # ----------------------------------------------------------------------------------------------------
     # Node calls
-        
+
     def method_call_arguments(self, **kwargs):
         
         vals = []
         
-        # ----- Extract the arg_rename dict
+        # ----- RULE 2 - extract the arg_rename dict
         
         fixed_args, arg_rename = self.extract_arg_rename(**kwargs)
+        
+        # ---- RULE 3: Get the {arg}_VALUE entries and add a fixed entry
+        
+        new_fixed_args = {}
+        for key in fixed_args:
+            if len(key) <= 6:
+                continue
+            if key[-6:] == '_VALUE':
+                new_fixed_args[key[:-6]] = fixed_args[key]
+                
+        fixed_args = {**fixed_args, **new_fixed_args}
             
         # ---------------------------------------------------------------------------
         # We make two passes:
@@ -2111,7 +2172,7 @@ from geonodes.core.node import Node
             
             # ----- Some exclusion
             
-            if wn.bl_idname in ['NodeReroute', 'NodeGroupInput', 'NodeGroupOutput', 'GeometryNodeViewer', 'NodeFrame']:
+            if wn.bl_idname in ['NodeReroute', 'NodeGroupInput', 'NodeGroupOutput', 'NodeFrame']:
                 continue
             
             # ----- Write the node
@@ -2197,7 +2258,7 @@ def build_geonodes_auto_doc(fpath):
     
     # ----- Nodes inherits
     
-    node.inherits(['Viewer','Frame', 'CustomGroup', 'SceneTime'], 'Node')
+    node.inherits(['Frame', 'CustomGroup', 'SceneTime'], 'Node')
     node.inherits(['Group','GroupInput', 'GroupOutput'], 'CustomGroup')
     
     # ----- Domains inherits

@@ -99,10 +99,10 @@ class Generator:
         # ----------------------------------------------------------------------------------------------------
         # Key word arguments either initialize attributes or are Node arguments
         
-        ok_self_value = False
+        self.ok_self_argument_value = False
         for k, v in kwargs.items():
             if v == 'self':
-                ok_self_value = True
+                self.ok_self_argument_value = True
                 
             if k in ['fname', 'indent']:
                 k += '_'
@@ -112,7 +112,8 @@ class Generator:
             else:
                 self.kwargs[k] = v
                 
-        if not ok_self_value:
+        # ----- CHECK if self value has be forgotten
+        if False and self.ok_self_argument_value:
             if type(self).__name__ not in ['Function', 'Constructor', 'Static', 'Source', 'PropReadError', 'Comment']:
                 print(f"CAUTION: Methode '{self.fname_}' doesn't use self ({type(self).__name__}")
                 for k, v in kwargs.items():
@@ -343,83 +344,21 @@ class Generator:
         # ----------------------------------------------------------------------------------------------------
         # Documentation
         
-        if True:
-            text = ""
-            for line in self.gen_markdown(node):
-                if line is not None:
-                    text += line 
-            lines = text.split("\n")
-            del text
-            
-            yield self.indent(1) + '"""\n\n'    
-            for line in lines:
-                if line == "":
-                    yield "\n"
-                else:
-                    yield self.indent(1) + line + "\n"
-            yield self.indent(1) + '"""\n\n'
-            
-        else:
-            # ----- Header
-            
-            yield self.indent(1) + f'""" Node {node.node_name}.\n\n'
-            yield self.indent(1) + f"Node reference [{node.bnode.name}]({node.blender_ref})\n"
-            yield self.indent(1) + f"Developer reference [{node.bl_idname}]({node.blender_python_ref})\n\n"
-            
-            if self.com_descr is not None:
-                for line in self.com_descr.split('\n'):
-                    yield self.indent(1) + line + "\n"
-                yield "\n"
-    
-            # ----- Arguments
-                
-            if self.com_args is None:
-                ok_arg = False
-                for arg in node.get_node_arguments():
-                    if not arg.name in self.kwargs.keys():
-                        if not ok_arg:
-                            yield self.indent(1) + f"Args:\n"
-                            ok_arg = True
-                        yield self.indent(2) + f"{arg.scomment(**self.kwargs)}\n"
+        text = ""
+        for line in self.gen_markdown(node):
+            if line is not None:
+                text += line 
+        lines = text.split("\n")
+        del text
         
-                if ok_arg:
-                    yield "\n"
-                    
+        yield self.indent(1) + '"""\n\n'    
+        for line in lines:
+            if line == "":
+                yield "\n"
             else:
-                if len(self.com_args):
-                    yield self.indent(1) + f"Args:\n"
-                    for line in self.com_args:
-                        yield self.indent(2) + line + "\n"
-                    yield "\n"
-                    
-            # ----- Returns
-            
-            if self.com_ret is None:
-                if self.decorator != 'setter':
-                    yield self.indent(1) + f"Returns:\n"
-                    
-                    if self.ret_socket is None:
-                        yield self.indent(2) + f"node with sockets {list(node.outputs.unames.keys())}\n"
-                        
-                    elif isinstance(self.ret_socket, tuple):
-                        yield self.indent(2) + f"tuple {self.ret_socket}\n"
-                        
-                    else:
-                        yield self.indent(2) + f"socket `{self.ret_socket}`"
-                        if self.ret_class is None or self.ret_class == 'cls':
-                            yield "\n"
-                        else:
-                            yield f" [{self.ret_class}]({self.ret_class}.md)\n"
-                            
-            else:
-                if self.com_ret != "":
-                    yield self.indent(1) + f"Returns:\n"
-                    for line in self.com_ret.split('\n'):
-                        yield self.indent(1) + line + "\n"
-                        
-            # ----- Done
-                        
-            yield self.indent(1) + '"""\n'
+                yield self.indent(1) + line + "\n"
+        yield self.indent(1) + '"""\n\n'
+
             
         # ----------------------------------------------------------------------------------------------------
         # Body
@@ -976,7 +915,7 @@ class ClassGenerator(dict):
             
             f.write("pi = 3.141592653589793\n\n")
             
-            f.write("from geonodes.core.node import Node, GroupInput, GroupOutput, Frame, Viewer, SceneTime, Group\n")
+            f.write("from geonodes.core.node import Node, GroupInput, GroupOutput, Frame, SceneTime, Group\n")
             f.write("from geonodes.core.tree import Tree, Trees\n\n")
             f.write("from geonodes.nodes import nodes\n\n")
             
@@ -1270,7 +1209,7 @@ class ClassGenerator(dict):
                         classes[class_name] = gens
                         
                 if len(classes) == 0:
-                    if blid not in ['NodeFrame', 'GeometryNodeGroup', 'GeometryNodeViewer', 'NodeReroute',
+                    if blid not in ['NodeFrame', 'GeometryNodeGroup', 'NodeReroute',
                                     'NodeGroupInput', 'NodeGroupOutput']:
                         print(f"CAUTION: node not implemented in classes: {blid:35} {wnode.bnode.name}")
                     
@@ -1951,7 +1890,7 @@ GEOMETRY = {
     },
     'GeometryNodeSampleIndex': {
         'Geometry': Method(dtype=('data_type', 'value'), ret_socket='value', geometry='self'),
-        'Domain'  : DomMethod(dtype=('data_type', 'value'), ret_socket='value', geometry='self'),
+        'Domain'  : DomMethod(dtype=('data_type', 'value'), ret_socket='value', geometry='self', index_VALUE='self.index_for_sample(index)'),
     },
     'GeometryNodeSampleNearest': {
         'Geometry': Method(ret_socket='index', geometry='self'),
@@ -2385,6 +2324,19 @@ MESH_TOPOLOGY = {
     'GeometryNodeVertexOfCorner':          {
         'Mesh':   Attribute(ret_socket='vertex_index'),
         'Corner': DomPropAttribute(fname='vertex_index', corner_index='self.selection_index', ret_socket='vertex_index'),
+        },
+    }
+
+OUTPUT = {
+    'GeometryNodeViewer': {
+        'Geometry': [
+            Method(fname= 'viewer', geometry='self', dtype=('data_type', 'value')),
+            Method(fname= 'view',   geometry='self', dtype=('data_type', 'value')),
+            ],
+        'Domain':   [
+            DomMethod(fname= 'viewer', geometry='self', dtype=('data_type', 'value')),
+            DomMethod(fname= 'view',   geometry='self', dtype=('data_type', 'value')),
+            ],
         },
     }
 
@@ -3071,6 +3023,7 @@ ALL = {
        **MESH,
        **MESH_PRIMITIVES,
        **MESH_TOPOLOGY,
+       **OUTPUT,
        **POINT,
        **TEXT,
        **TEXTURE,
