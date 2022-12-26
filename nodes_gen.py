@@ -216,10 +216,11 @@ import bpy
 import mathutils
 from pprint import pprint, pformat
 
-from generator.pyparser import Module
+from generator import pyparser
 from generator import code_gen
 
 from importlib import reload
+reload(pyparser)
 reload(code_gen)
 
 
@@ -2202,6 +2203,8 @@ from geonodes.core.node import Node
 
 def build_geonodes_auto_doc(fpath):
     
+    Module = pyparser.Module
+    
     #arrange     = Module(fpath + file_name="core/arrange.py"),
     #colors      = Module(fpath + file_name="core/colors.py"),
     #context     = Module(fpath + file_name="core/context.py"),
@@ -2216,8 +2219,9 @@ def build_geonodes_auto_doc(fpath):
     domains     = Module(fpath + "nodes/domains.py",  'ALL')
     
     class_docs  = Module(fpath + "core/class_docs.py")
+    functions   = Module(fpath + "nodes/functions.py")
     
-    modules = [datasockets, domain, node, socket, tree, classes, domains]
+    modules = [datasockets, domain, node, socket, tree, classes, domains, functions]
     
     # ----- Complementory doc
     
@@ -2270,21 +2274,30 @@ def build_geonodes_auto_doc(fpath):
     # ----- Update the documentation
     
     for module in modules:
-        for class_name in module.documented_classes:
-            #print(f"Documentation of {class_name}")
-            with open(fpath + f"docs/api/{class_name}.md", 'w') as f:
-                f.writelines(module.markdown(class_name))
+        if module.name == 'functions':
+            with open(fpath + "docs/api/functions.md", 'w') as f:
+                f.writelines([line for line in module.functions.gen_markdown()])
+            
+        else:
+            for class_name in module.documented_classes:
+                #print(f"Documentation of {class_name}")
+                with open(fpath + f"docs/api/{class_name}.md", 'w') as f:
+                    f.writelines(module.markdown(class_name))
                 
                     
 # ====================================================================================================
 # Generate the nodes module
                 
-def create_geonodes(fpath):
+def create_geonodes(fpath, version):
+    
+    gn_version = bpy.app.version + (version,)
     
     print("-"*80)
     print("Generating nodes and sockets python from Blender geometry nodes")
     print(f"Blender version: {bpy.app.version_string}")
+    print(f"Geonode version: {gn_version}")
     print("")
+    
                 
     # ----- Create all the blender nodes
     
@@ -2304,7 +2317,7 @@ def create_geonodes(fpath):
     print("Create data classes...")
         
     cg = code_gen.get_class_generators(WNode.WNODES)
-    cg.create_files(fpath, version=(2, 0, 0))
+    cg.create_files(fpath, version=gn_version)
     
     print("Create documentation...")
 
@@ -2318,7 +2331,7 @@ def create_geonodes(fpath):
     print("Done")
     print()
     
-    print('Generation completed')
+    print(f"Version {gn_version} completed")
     print()
     print("Import geonodes.test_file to test the generation")
     print()

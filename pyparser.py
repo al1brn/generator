@@ -414,14 +414,15 @@ SECTIONS = ['Properties', 'Class and static methods', 'Methods']
 
 class ClassDoc:
     
-    def __init__(self, class_name):
+    def __init__(self, class_name, is_class=True):
         self.name       = class_name
+        self.is_class   = is_class
+        
         self.init       = None
         self.comment    = ""
         
         self.inheritance = {section: set() for section in SECTIONS}
-        
-        self.sections = {section: {} for section in SECTIONS}
+        self.sections    = {section: {} for section in SECTIONS}
         
     @property
     def props(self):
@@ -440,7 +441,7 @@ class ClassDoc:
     # Rep
     
     def __repr__(self):
-        s = f"class {self.name}\n"
+        s = f"class {self.name} (functions: {self.functions})\n"
         s += f"   - init       : {self.init is not None}\n"
         s += f"   - comment    : {self.comment[:15]}...\n"
         s += f"   - props      : {len(self.props)}\n"
@@ -453,16 +454,19 @@ class ClassDoc:
         
     def add(self, cdoc):
         
+        # ----- Check
+        
+        if self.is_class != cdoc.is_class:
+            raise Exception(f"is_class incompatibility: ClassDoc={self.is_class}, cdoc: {cdoc.is_class}")
+            
+        if self.is_class:
+
         # ----- Class Comment
         
-        if cdoc.comment != "":
-            if self.comment != "":
-                self.comment += "\n\n"
-            self.comment += cdoc.comment
-            
-        self.is_class = cdoc.is_class
-        
-        if self.is_class:
+            if cdoc.comment != "":
+                if self.comment != "":
+                    self.comment += "\n\n"
+                self.comment += cdoc.comment
             
             # ----- Methods
             
@@ -511,6 +515,12 @@ class ClassDoc:
                         'args'   : fdoc.args,
                         'comment': fdoc.comment,
                         }
+                    
+        else:
+            self.methods[cdoc.name] = {
+                'args'    : cdoc.args,
+                'comment' : cdoc.comment,
+                }
                     
     # ----------------------------------------------------------------------------------------------------
     # Get inheritance
@@ -561,6 +571,9 @@ class ClassDoc:
     
     def gen_markdown(self):
         
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # Desindent utility
+        
         def desindent(text, n):
             lines = text.split("\n")
             ok_args    = False
@@ -610,7 +623,14 @@ class ClassDoc:
                     
             return "\n".join(lines)
         
-        yield f"# Class {self.name}\n\n"
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        
+        if self.is_class:
+            yield f"# Class {self.name}\n\n"
+            top_anchor = f"#class-{self.name}"
+        else:
+            yield f"# Global functions\n\n"
+            top_anchor = "#global-functions"
         
         yield "> [main](../index.md) - [nodes](nodes.md) - [nodes menus](nodes_menus.md)\n\n"
         
@@ -639,8 +659,11 @@ class ClassDoc:
         for section in SECTIONS:
             methods = self.sections[section]
             inhs    = self.inheritance[section]
+            
             if methods or inhs:
-                yield f"**{section}**\n\n"
+                
+                if self.is_class:
+                    yield f"**{section}**\n\n"
                 
                 if methods:
                     lines = [f"[{mname}](#{mname})" for mname in sorted(methods)]
@@ -661,7 +684,8 @@ class ClassDoc:
             methods = self.sections[section]
             
             if methods:
-                yield f"## {section}\n\n"
+                if self.is_class:
+                    yield f"## {section}\n\n"
                 
                 for mname in sorted(methods):
                     meth = methods[mname]
@@ -681,7 +705,7 @@ class ClassDoc:
                         
                     # ----- Bottom menu
                     
-                    yield f"<sub>Go to [top](#class-{self.name}) - [main](../index.md) - [nodes](nodes.md) - [nodes menus](nodes_menus.md)</sub>\n\n"
+                    yield f"<sub>Go to [top]({top_anchor}) - [main](../index.md) - [nodes](nodes.md) - [nodes menus](nodes_menus.md)</sub>\n\n"
 
 
 # ====================================================================================================
@@ -695,11 +719,16 @@ class Module:
         
         self.parsed     = Parser.FromFile(file_name).documentation()
         self.class_docs = {}
+        self.functions  = ClassDoc('functions', is_class=False)
         
         for class_name, cdoc in self.parsed.items():
-            class_doc = ClassDoc(class_name)
-            class_doc.add(cdoc)
-            self.class_docs[class_name] = class_doc
+            if cdoc.is_class:
+                class_doc = ClassDoc(class_name)
+                class_doc.add(cdoc)
+                self.class_docs[class_name] = class_doc
+                
+            else:
+                self.functions.add(cdoc)
 
         self.documented_classes = []
         if documented_classes is not None:
@@ -752,8 +781,6 @@ class Module:
             
     def markdown(self, class_name):
         return [line for line in self.class_docs[class_name].gen_markdown()]
-
-                        
    
     
 def debug():
