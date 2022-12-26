@@ -637,10 +637,12 @@ class ClassDoc:
         # ----------------------------------------------------------------------------------------------------
         # Global comment
         
+        n_indent = 2 if self.is_class else 1
+        
         # ----- Comment
         
         if ok_comment(self.comment):
-            yield desindent(self.comment, 1) + "\n\n"
+            yield desindent(self.comment, n_indent - 1) + "\n\n"
             
         # Completed by init
             
@@ -650,7 +652,7 @@ class ClassDoc:
             yield f"```python\n{self.name}{self.init['args']}\n```\n\n"
             
             if ok_comment(self.init['comment']):
-                yield desindent(self.init['comment'], 2) + "\n\n"
+                yield desindent(self.init['comment'], n_indent) + "\n\n"
                 
         # ----- TOC
         
@@ -701,7 +703,7 @@ class ClassDoc:
                         yield f"```python\n{sdeco}def {mname}{meth['args']}\n```\n\n"
                         
                     if ok_comment(meth.get('comment')):
-                        yield desindent(meth['comment'], 2) + "\n\n"
+                        yield desindent(meth['comment'], n_indent) + "\n\n"
                         
                     # ----- Bottom menu
                     

@@ -1850,7 +1850,7 @@ class WNode:
             else:
                 yield _1_ + "Node implementation:"
                 for class_name, gs in node_ref.items():
-                    if class_name == 'function':
+                    if class_name == 'functions':
                         yield _2_ + 'global functions:'
                     else:
                         yield _2_ + f"{class_name}:"

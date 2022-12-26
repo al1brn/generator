@@ -11,7 +11,7 @@ Created on Tue Dec 13 17:41:59 2022
 
 CLASSES = {
     
-    'function'      : ('functions', None),
+    'functions'     : ('functions', None),
     
     # Geometry
 
@@ -526,7 +526,7 @@ class Generator:
             
         for inst_name in inst_names:
             if self.decorator is None:
-                if class_name == 'function':
+                if class_name == 'functions':
                     yield f"gn.{self.fname(node)}()"
                 else:
                     fname = self.fname(node)
@@ -900,7 +900,7 @@ class ClassGenerator(dict):
         
         # ----- Global functions
         
-        methods = self.class_methods('function')
+        methods = self.class_methods('functions')
         
         s = None
         for f, _, _ in methods:
@@ -922,7 +922,7 @@ class ClassGenerator(dict):
                     
     def gen_class(self, class_name):
         
-        if class_name != 'function':
+        if class_name != 'functions':
             if class_name not in CLASSES:
                 raise Exception(f"{class_name} not in CLASSES!")
                 
@@ -1053,7 +1053,7 @@ class ClassGenerator(dict):
                 file_name = f"{folder}docs/api/{class_name}.md"
     
                 with open(file_name, 'w') as f:
-                    if class_name == 'function':
+                    if class_name == 'functions':
                         f.write("# Functions\n\n")
                     else:
                         f.write(f"# class {class_name}\n\n")
@@ -1199,7 +1199,7 @@ class ClassGenerator(dict):
             'Material'          : MATERIAL,
             'Mesh'              : MESH,
             'Mesh Primitives'   : MESH_PRIMITIVES,
-            #'Output'            : OUTPUT,
+            'Output'            : OUTPUT,
             'Point'             : POINT,
             'Text'              : TEXT,
             'Texture'           : TEXTURE,
@@ -1251,7 +1251,7 @@ class ClassGenerator(dict):
                     gens = class_nodes.get(blid)
                     if gens is not None:
                         if class_name == "function":
-                            class_name = 'A' # For sorting :-)
+                            class_name = 'functions'
                         classes[class_name] = gens
                         
                 if len(classes) == 0:
@@ -1271,7 +1271,7 @@ class ClassGenerator(dict):
                         
                         gens = classes[class_name]
                         
-                        if class_name == 'A': # function
+                        if class_name == 'functions': # function
                             f.write("| Global functions |\n")
                         else:
                             f.write(f"| **[{class_name}]({class_name}.md)** |\n")
@@ -1442,11 +1442,11 @@ ATTRIBUTE = {
 
 COLOR = {
     'ShaderNodeValToRGB': {
-        'function': Function(),
+        'functions': Function(),
         'Float': Property(self_='fac'),
     },
     'FunctionNodeCombineColor': {
-        'function': [
+        'functions': [
             Function(fname='combine_rgb', ret_socket='color', mode="'RGB'"),
             Function(fname='combine_hsv', ret_socket='color', mode="'HSV'", arg_rename={'red': 'hue', 'green': 'saturation', 'blue': 'value'}),
             Function(fname='combine_hsl', ret_socket='color', mode="'HSL'", arg_rename={'red': 'hue', 'green': 'saturation', 'blue': 'lightness'}),
@@ -1458,7 +1458,7 @@ COLOR = {
             ]
     },
     'ShaderNodeMix': {
-        'function': [
+        'functions': [
             Function(fname='float_mix', ret_socket='result', data_type="'FLOAT'", blend_type="'MIX'", clamp_result=False, factor_mode="'UNIFORM'"),
             Function(fname='vector_mix', ret_socket='result', data_type="'VECTOR'", blend_type="'MIX'", clamp_result=False),
             
@@ -1509,11 +1509,11 @@ COLOR = {
             ]
     },
     'ShaderNodeRGBCurve': {
-        'function': Function(),
+        'functions': Function(),
         'Color': Property(self_='color'),
     },
     'FunctionNodeSeparateColor': {
-        'function': [
+        'functions': [
             Function(fname='separate_rgb', ret_socket=('red', 'green', 'blue', 'alpha'), mode="'RGB'"),
             Function(fname='separate_hsv', ret_socket=('red', 'green', 'blue', 'alpha'), mode="'HSV'"),
             Function(fname='separate_hsl', ret_socket=('red', 'green', 'blue', 'alpha'), mode="'HSL'"),
@@ -1831,11 +1831,11 @@ GEOMETRY = {
             DomAttribute(fname='proximity', ret_socket='distance', target_element="'FACES'"),
     },
     'GeometryNodeGeometryToInstance': {
-        'function': Function(ret_socket='instances', ret_class='Instances'),
+        'functions': Function(ret_socket='instances', ret_class='Instances'),
         'Geometry': Method(self_=None, fname='to_instance', first_arg=None, ret_socket='instances', ret_class='Instances'),
     },
     'GeometryNodeJoinGeometry': {
-        'function': Function(ret_socket='geometry'),
+        'functions': Function(ret_socket='geometry'),
         'Geometry': Method(self_=None, fname='join', first_arg=None, body_start="self = geometry[0]", ret_socket='geometry'),
     },
     'GeometryNodeMergeByDistance': {
@@ -2345,30 +2345,30 @@ POINT = {
 
 TEXT = {
     'GeometryNodeStringJoin': {
-        'function': Function(ret_socket='string'),
+        'functions': Function(ret_socket='string'),
         'String':   [
             Method(self_='delimiter', ret_socket='string', fname='join'),
             Method(self_=None,        ret_socket='string', fname='string_join', first_arg=None),
             ],
     },
     'FunctionNodeReplaceString': {
-        'function': Function(ret_socket='string'),
+        'functions': Function(ret_socket='string'),
         'String':   Method(fname='replace', self_='string', ret_socket='string'),
     },
     'FunctionNodeSliceString': {
-        'function': Function(ret_socket='string'),
+        'functions': Function(ret_socket='string'),
         'String':   Method(fname='slice', self_='string', ret_socket='string'),
     },
     'FunctionNodeStringLength': {
-        'function': Function(ret_socket='length'),
+        'functions': Function(ret_socket='length'),
         'String':   Property(fname='length', self_='string', ret_socket='length'),
     },
     'GeometryNodeStringToCurves': {
-        'function': Function(ret_socket=('curve_instances', 'line', 'pivot_point'), ret_class=('Instances', None, None)),
+        'functions': Function(ret_socket=('curve_instances', 'line', 'pivot_point'), ret_class=('Instances', None, None)),
         'String':   Method(fname='to_curves', self_='string', ret_socket=('curve_instances', 'line', 'pivot_point'), ret_class=('Instances', None, None)),
     },
     'FunctionNodeValueToString': {
-        'function' : Function(ret_socket='string'),
+        'functions' : Function(ret_socket='string'),
         'Float'    : Method(self_='value', fname='to_string', ret_socket='string'),
         'Integer'  : Method(self_='value', fname='to_string', ret_socket='string', decimals=0),
     },
@@ -2466,7 +2466,7 @@ UTILITIES = {
         'Domain': DomAttribute(ret_socket=('leading', 'trailing', 'total'), dtype=('data_type', 'value')),
     },
     'FunctionNodeAlignEulerToVector': {
-        'function': Function(ret_socket='rotation'),
+        'functions': Function(ret_socket='rotation'),
         'Vector':   [
             StackMethod(self_='rotation'),
             Constructor(fname="AlignToVector", rotation=None, ret_socket='rotation'),
@@ -2474,7 +2474,7 @@ UTILITIES = {
         #'Rotation': StackMethod(rotation='self', fname='align_to_vector'),
     },
     'FunctionNodeBooleanMath': {
-        'function': [
+        'functions': [
             Function(fname='b_and', ret_socket='boolean', operation="'AND'"),
             Function(fname='b_or',  ret_socket='boolean', operation="'OR'"),
             Function(fname='b_not', ret_socket='boolean', operation="'NOT'", boolean1=None),
@@ -2498,7 +2498,7 @@ UTILITIES = {
             ],
     },
     'ShaderNodeClamp': {
-        'function': [
+        'functions': [
             Function(ret_socket='result'),
             Function(ret_socket='result', fname='clamp_min_max', clamp_type="'MINMAX'"),
             Function(ret_socket='result', fname='clamp_range',   clamp_type="'RANGE'"),
@@ -2510,7 +2510,7 @@ UTILITIES = {
             ],
     },
     'FunctionNodeCompare': {
-        'function': Function(ret_socket='result'),
+        'functions': Function(ret_socket='result'),
         'Float': [
             Method(self_='a', ret_socket='result', data_type="'FLOAT'", c=None, angle=None, mode="'ELEMENT'"),
             Method(self_='a', ret_socket='result', data_type="'FLOAT'", c=None, angle=None, mode="'ELEMENT'",
@@ -2665,7 +2665,7 @@ UTILITIES = {
             ],
     },
     'ShaderNodeMath': {
-        'function': [
+        'functions': [
             Function(ret_socket='value'),
             
             #Function(ret_socket='value', fname='add',             operation="'ADD'",          value2=None),
@@ -2809,7 +2809,7 @@ UTILITIES = {
             ],
     },
     'FunctionNodeRandomValue': {
-        'function': [
+        'functions': [
             Function(ret_socket='value', fname='random_float',   data_type="'FLOAT'",        probability=None),
             Function(ret_socket='value', fname='random_integer', data_type="'INT'",          probability=None),
             Function(ret_socket='value', fname='random_vector',  data_type="'FLOAT_VECTOR'", probability=None),
@@ -2835,7 +2835,7 @@ UTILITIES = {
         
     },
     'FunctionNodeRotateEuler': {
-        'function': [
+        'functions': [
             Function(fname='rotate_euler',      ret_socket='rotation', type="'EULER'", axis=None, angle=None),
             Function(fname='rotate_axis_angle', ret_socket='rotation', type="'AXIS_ANGLE'", rotate_by=None),
             ],
@@ -2847,7 +2847,7 @@ UTILITIES = {
         #    ],
     },
     'GeometryNodeSwitch': {
-        'function': [
+        'functions': [
             Function(ret_socket='output'),
             Function(ret_socket='output', fname='switch_float',      input_type="'FLOAT'"),
             Function(ret_socket='output', fname='switch_integer',    input_type="'INT'"),
