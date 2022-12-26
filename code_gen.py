@@ -1147,7 +1147,7 @@ class ClassGenerator(dict):
                         
                     yield f"| [{class_name}]({class_name}.md) | "
                     
-                    # List of methodes
+                    # List of methods
                     
                     if len(gens) == 1:
                         gen = gens[0]
