@@ -855,8 +855,8 @@ class Arguments(list):
     # ====================================================================================================    
     # DataClass and Domain methods implementing Nodes
     #
-    # - method_header         : returns the header of the DataClass method
-    # - method_call_arguments = returns the arguments for node creation
+    # - method_header       : returns the header of the DataClass method
+    # - node_init_arguments : returns the arguments for node creation (plus the use of self)
     #
     # The basic idea is the following
     #
@@ -972,8 +972,8 @@ class Arguments(list):
     
     # ----------------------------------------------------------------------------------------------------
     # Node calls
-
-    def method_call_arguments(self, **kwargs):
+    
+    def node_init_arguments(self, **kwargs):
         
         vals = []
         
@@ -991,7 +991,7 @@ class Arguments(list):
                 new_fixed_args[key[:-6]] = fixed_args[key]
                 
         fixed_args = {**fixed_args, **new_fixed_args}
-            
+        
         # ---------------------------------------------------------------------------
         # We make two passes:
         # - first for multi argument
@@ -1023,10 +1023,6 @@ class Arguments(list):
                             vals.append(f"{arg.name_or_label}={arg_name}")
                 
         return ", ".join(vals)
-                
-        
-    
-    
 
 
 # ====================================================================================================
