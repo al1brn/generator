@@ -224,6 +224,34 @@ reload(pyparser)
 reload(code_gen)
 
 
+# ====================================================================================================
+# All enums per param
+
+ALL_ENUMS  = {}
+DATA_TYPE_TUPLES = []
+
+def add_enum_list(key, values):
+    ALL_ENUMS[key] = ALL_ENUMS.get(key, set()).union(values)
+    if key == 'data_type':
+        DATA_TYPE_TUPLES.append(values)
+
+    
+def print_all_enums():
+    
+    print()
+    print("list of enums:")
+    for k, v in ALL_ENUMS.items():
+        print(f"{k:15s}: {v}")
+        
+    print()
+    print('-'*30)
+    print("data_type tuples:")
+    print()
+    for v in DATA_TYPE_TUPLES:
+        print(v)
+    
+
+# ====================================================================================================
 
 
 DEPRECATED = {
@@ -1263,6 +1291,8 @@ class Parameter:
                 self.is_enum = i > 0
                 if self.is_enum:
                     self.values = eval(msg[i+26:])
+                    add_enum_list(name, self.values)
+                    
                     
         # ----- Some hack :-( 
         
@@ -2310,7 +2340,7 @@ def build_geonodes_auto_doc(fpath):
 # ====================================================================================================
 # Generate the nodes module
                 
-def create_geonodes(fpath, version):
+def create_geonodes(fpath, version, print_enums=False):
     
     gn_version = bpy.app.version + (version,)
     
@@ -2363,6 +2393,9 @@ def create_geonodes(fpath, version):
     print("in the geometry nodes editor and then back to the script editor.")
     print("Lauch generator.node_sizes() WITHOUT LAUNCHING create_geonodes AGAIN!")
     print("... hope it works.")
+    
+    if print_enums:
+        print_all_enums()
 
 # ====================================================================================================
 # Generate the nodes module
