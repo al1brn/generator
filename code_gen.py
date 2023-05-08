@@ -58,16 +58,16 @@ CLASSES = {
 # ====================================================================================================
 # Data types
 
-BYTE_COLOR   = 'BYTE_COLOR'
-FLOAT_COLOR  = 'FLOAT_COLOR'  # RGBA
-FLOAT        = 'FLOAT'
-STRING       = 'STRING'
-FLOAT2       = 'FLOAT2'
-BOOLEAN      = 'BOOLEAN'
-INT          = 'INT'
-RGBA         = 'RGBA'         # FLOAT_COLOR
-VECTOR       = 'VECTOR'
-FLOAT_VECTOR = 'FLOAT_VECTOR' # VECTOR
+BYTE_COLOR   = "'BYTE_COLOR'"
+FLOAT_COLOR  = "'FLOAT_COLOR'"  # RGBA
+FLOAT        = "'FLOAT'"
+STRING       = "'STRING'"
+FLOAT2       = "'FLOAT2'"
+BOOLEAN      = "'BOOLEAN'"
+INT          = "'INT'"
+RGBA         = "'RGBA'"         # FLOAT_COLOR
+VECTOR       = "'VECTOR'"
+FLOAT_VECTOR = "'FLOAT_VECTOR'" # VECTOR
 
 
 # ====================================================================================================
