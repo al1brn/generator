@@ -1234,6 +1234,7 @@ class WSockets(list):
             inds[uname] = index
         return inds
     
+    
 # ====================================================================================================
 # A parameter wrapper
 
@@ -1243,14 +1244,15 @@ class Parameter:
         self.name    = name
         self.uname   = name
 
-        self.is_enum = False
-        self.default = self.value
+        self.is_enum    = False  # The parameter value is chosen in an enum list : self.values
+        self.default    = self.value
         self.param_type = type(self.default).__name__ 
         
         if isinstance(self.default, bpy.types.bpy_struct):
             self.default = None
         elif isinstance(self.default, mathutils.Vector):
             self.default = list(self.default)
+            
         if isinstance(self.default, str):
             try:
                 setattr(self.wnode.bnode, self.name, 'ERROR')
@@ -1262,6 +1264,15 @@ class Parameter:
                 if self.is_enum:
                     self.values = eval(msg[i+26:])
                     
+        # ----- Some hack :-( 
+        
+        if self.wnode.bl_idname == 'FunctionNodeCompare' and self.name == 'operation':
+            self.values = ('LESS_THAN', 'LESS_EQUAL', 'GREATER_THAN', 'GREATER_EQUAL', 'EQUAL', 'NOT_EQUAL', 'DARKER', 'BRIGHTER')
+                    
+    def __str__(self):
+        vals = str(self.values) if self.is_enum else self.default
+        return f"<WNode Parameter {self.name} ({self.uname}): {vals}>"
+    
     @property
     def sdefault(self):
         if isinstance(self.default, str):
@@ -1961,21 +1972,32 @@ class WNode:
                 yield_comment = False
                 
             # self.param = arg
-                
-            if self.has_shared_sockets and param.name == self.driving_param:
-                
-                socket_name = None
-                for uname, wsocks in self.inputs.unames.items():
-                    if isinstance(wsocks, list):
-                        socket_name = uname
-                if socket_name is None:
-                    yield _2_ + f"self.bnode.{param.name:15s} = {name}"
-                    #raise RuntimeError(f"None, {self}: No uname found for the the driving param '{param.name}'")
+            
+            # OLD: call value_data_type for data_type attribute
+            if False:
+                if self.has_shared_sockets and param.name == self.driving_param:
+                    
+                    socket_name = None
+                    for uname, wsocks in self.inputs.unames.items():
+                        if isinstance(wsocks, list):
+                            socket_name = uname
+                    if socket_name is None:
+                        yield _2_ + f"self.bnode.{param.name:15s} = {name}"
+                        #raise RuntimeError(f"None, {self}: No uname found for the the driving param '{param.name}'")
+                    else:
+                        yield _2_ + f"self.bnode.{param.name:15s} = self.value_data_type({socket_name}) if {name} is None else {name}"
+                    
                 else:
-                    yield _2_ + f"self.bnode.{param.name:15s} = self.value_data_type({socket_name}) if {name} is None else {name}"
-                
+                    yield _2_ + f"self.bnode.{param.name:15s} = {name}"
+                    
+            # NEW: call check_enum_value for all enum values
             else:
-                yield _2_ + f"self.bnode.{param.name:15s} = {name}"
+                if param.is_enum:
+                    yield _2_ + f"self.bnode.{param.name:15s} = self.check_enum_value({name}, '{param.name}', {param.values}, '{param.default}')"
+                else:
+                    yield _2_ + f"self.bnode.{param.name:15s} = {name}"
+                
+                
         
         if not yield_comment:
             yield "\n"

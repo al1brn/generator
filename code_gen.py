@@ -1348,11 +1348,6 @@ class ClassGenerator(dict):
                     
                 with open(ftarget, 'w') as f:
                     f.writelines(text)
-                
-                
-            
-            
-            
                         
                             
 # ====================================================================================================
@@ -1362,6 +1357,8 @@ COMMENTS = {}
 
 # ====================================================================================================
 # Attribute Menu
+
+# Blender Version 3.5
 
 ATTRIBUTE = {
     'GeometryNodeAttributeStatistic': {
@@ -1378,13 +1375,7 @@ ATTRIBUTE = {
             DomMethod(self_='geometry', dtype=('data_type', 'attribute'), fname='attribute_var',    ret_socket='variance'),
             ],
         },
-    'GeometryNodeCaptureAttribute': {
-        'Geometry': [
-            StackMethod(self_='geometry', ret_socket='attribute',    dtype=('data_type', 'value')),
-            Static(fname='capture_attribute_node'), # Used to automatically capture attributes
-            ],
-        'Domain':   DomStackMethod(self_='geometry', ret_socket='attribute', dtype=('data_type', 'value')),
-        },
+    
     'GeometryNodeAttributeDomainSize': {
         'Geometry' : Property(self_='geometry', cache=True),
         
@@ -1415,6 +1406,35 @@ ATTRIBUTE = {
         'Instance'     : DomProperty(self_='geometry', fname='count', component="'INSTANCES'", ret_socket='instance_count'),
         
         },
+    
+    # V3.5 Blur attribute
+    
+    'GeometryNodeBlurAttribute' : {
+        #  data_type, value , default = 'FLOAT' in ('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR')
+        #'Geometry': Method(dtype=('data_type', 'value')),
+        'Domain'  : [
+            DomAttribute(dtype=('data_type', 'value'), ret_socket='value'),
+            DomAttribute(fname='blur_float',   data_type="'FLOAT'",        ret_socket='value'),
+            DomAttribute(fname='blur_integer', data_type="'INT'",          ret_socket='value'),
+            DomAttribute(fname='blur_vector',  data_type="'FLOAT_VECTOR'", ret_socket='value'),
+            DomAttribute(fname='blur_color',   data_type="'FLOAT_COLOR'",  ret_socket='value'),
+            ],
+        
+        },
+    
+    'GeometryNodeCaptureAttribute': {
+        'Geometry': [
+            StackMethod(self_='geometry', ret_socket='attribute',    dtype=('data_type', 'value')),
+            Static(fname='capture_attribute_node'), # Used to automatically capture attributes
+            ],
+        'Domain':   DomStackMethod(self_='geometry', ret_socket='attribute', dtype=('data_type', 'value')),
+        },
+    
+    'GeometryNodeRemoveAttribute': {
+        'Geometry': StackMethod(   self_='geometry'),
+        'Domain'  : DomStackMethod(self_='geometry'),
+        },
+    
     'GeometryNodeStoreNamedAttribute': {
         'Geometry': [
             StackMethod(self_='geometry', dtype=('data_type', 'value')),
@@ -1425,20 +1445,23 @@ ATTRIBUTE = {
             StackMethod(self_='geometry',  fname='store_named_color',   data_type="'FLOAT_COLOR'"),
             ],
         'Domain'  : [
-            # store_named_attribute implemented manually to operate on a selection
-            DomStackMethod(self_='geometry',  dtype=('data_type', 'value'), fname='store_named_attribute_no_selection'),
-            #DomStackMethod(self_='geometry',  fname='store_named_boolean', data_type="'BOOLEAN'"),
-            #DomStackMethod(self_='geometry',  fname='store_named_integer', data_type="'INT'"),
-            #DomStackMethod(self_='geometry',  fname='store_named_float',   data_type="'FLOAT'"),
-            #DomStackMethod(self_='geometry',  fname='store_named_vector',  data_type="'FLOAT_VECTOR'"),
-            #DomStackMethod(self_='geometry',  fname='store_named_color',   data_type="'FLOAT_COLOR'"),
+            # Before V3.5 = store_named_attribute implemented manually to operate on a selection
+            # Float, integer, vector, color, byte color, boolean, 2D vector
+            #('FLOAT', 'INT', 'FLOAT_VECTOR', 'FLOAT_COLOR', 'BYTE_COLOR', 'BOOLEAN', 'FLOAT2')
+            
+            DomStackMethod(self_='geometry', fname='store_named_attribute',  dtype=('data_type', 'value')),
+            
+            DomStackMethod(self_='geometry', fname='store_named_float',      data_type="'FLOAT'"),
+            DomStackMethod(self_='geometry', fname='store_named_integer',    data_type="'INT'"),
+            DomStackMethod(self_='geometry', fname='store_named_vector',     data_type="'FLOAT_VECTOR'"),
+            DomStackMethod(self_='geometry', fname='store_named_color',      data_type="'FLOAT_COLOR'"),
+            DomStackMethod(self_='geometry', fname='store_named_byte_color', data_type="'BYTE_COLOR'"),
+            DomStackMethod(self_='geometry', fname='store_named_boolean',    data_type="'BOOLEAN'"),
+            DomStackMethod(self_='geometry', fname='store_named_2D_vector',  data_type="'FLOAT2'"),
             ],
         },
-    'GeometryNodeRemoveAttribute': {
-        'Geometry': StackMethod(   self_='geometry'),
-        'Domain'  : DomStackMethod(self_='geometry'),
-        },
 }
+
 
 COLOR = {
     'ShaderNodeValToRGB': {
@@ -1598,9 +1621,14 @@ CURVE = {
     },
     'GeometryNodeTrimCurve': {
         'Curve':  [
-            StackMethod(self_='curve', fname='trim',        header="def trim(self, start=None, end=None, mode='FACTOR'):", start0='start', end0='start', start1='start', end1='end'),
+            StackMethod(self_='curve', fname='trim',        header="def trim(self, selection=None, start=None, end=None, mode='FACTOR'):", start0='start', end0='end', start1='start', end1='end'),
             StackMethod(self_='curve', fname='trim_factor', arg_rename={'start0': 'start', 'end0': 'end'}, start1=None, end1=None, mode="'FACTOR'"),
             StackMethod(self_='curve', fname='trim_length', arg_rename={'start1': 'start', 'end1': 'end'}, start0=None, end0=None, mode="'LENGTH'"),
+            ],
+        'Spline': [
+            DomStackMethod(self_='curve', fname='trim',        header="def trim(self, start=None, end=None, mode='FACTOR'):", start0='start', end0='end', start1='start', end1='end'),
+            DomStackMethod(self_='curve', fname='trim_factor', arg_rename={'start0': 'start', 'end0': 'end'}, start1=None, end1=None, mode="'FACTOR'"),
+            DomStackMethod(self_='curve', fname='trim_length', arg_rename={'start1': 'start', 'end1': 'end'}, start0=None, end0=None, mode="'LENGTH'"),
             ],
     },
     'GeometryNodeInputCurveHandlePositions': {
@@ -1718,6 +1746,16 @@ CURVE = {
             PropReadError(fname='type', class_name='Curve'),
             DomSetter(fname='type', stack=True, self_='curve', spline_type='attr_value', for_test="curve.splines.type = 'POLY'"),
             ],
+    },
+    
+    # V 3.5
+    
+    'GeometryNodeInterpolateCurves': {
+        'Curve'  : Method(self_='guide_curves', fname='interpolate'),
+        'Points' : Method(self_='points',       fname='interpolate'),
+        ('Vertex', 'ControlPoint', 'CloudPoint') :
+            DomMethod(self_='points', fname='interpolate'),
+
     },
 }
 
@@ -1899,7 +1937,7 @@ INPUT = {
         'Boolean': Constructor(fname='Boolean', ret_socket='boolean'),
     },
     'GeometryNodeCollectionInfo': {
-        'Geometry': Constructor(fname='Collection', ret_socket='geometry'),
+        'Geometry': Constructor(fname='Collection', ret_socket='instances'),
     },
     'FunctionNodeInputColor': {
         'Color': Constructor(fname='Color', ret_socket='color'),
@@ -1954,6 +1992,10 @@ INPUT = {
             Attribute(fname='named_vector',  ret_socket='attribute', data_type="'FLOAT_VECTOR'"),
             Attribute(fname='named_color',   ret_socket='attribute', data_type="'FLOAT_COLOR'"),
             Attribute(fname='named_boolean', ret_socket='attribute', data_type="'BOOLEAN'"),
+            
+            # V3.5
+
+            Attribute(fname='named_attribute_exists', ret_socket='exists'),
             ],
         'Domain': [
             DomAttribute(fname='named_attribute',   ret_socket='attribute'),
@@ -1962,6 +2004,9 @@ INPUT = {
             DomAttribute(fname='named_vector',  ret_socket='attribute', data_type="'FLOAT_VECTOR'"),
             DomAttribute(fname='named_color',   ret_socket='attribute', data_type="'FLOAT_COLOR'"),
             DomAttribute(fname='named_boolean', ret_socket='attribute', data_type="'BOOLEAN'"),
+            
+            # V3.5
+            DomAttribute(fname='named_attribute_exists', ret_socket='exists'),
             ],
     },
     'GeometryNodeInputNormal': {
@@ -1987,6 +2032,20 @@ INPUT = {
             Constructor(fname='Frame', ret_socket='frame'),
             ]
     },
+    
+    # V3.5
+    
+    'GeometryNodeImageInfo': {
+        'Image': [
+            Method(self_='image', fname='info'),
+            Method(self_='image', fname='width',        ret_socket='width'),
+            Method(self_='image', fname='height',       ret_socket='height'),
+            Method(self_='image', fname='has_alpha',    ret_socket='has_alpha'),
+            Method(self_='image', fname='frame_count',  ret_socket='frame_count'),
+            Method(self_='image', fname='fps',          ret_socket='fps'),
+            ]
+    },
+    
 
 }
 
@@ -2166,7 +2225,7 @@ MESH = {
     },
     'GeometryNodeMeshFaceSetBoundaries': {
         'Mesh': Attribute(   ret_socket='boundary_edges'),
-        'Face': DomAttribute(face_set='self.selection_index', ret_socket='boundary_edges'),
+        'Face': DomAttribute(face_group_id='self.selection_index', ret_socket='boundary_edges'),
     },
     'GeometryNodeInputMeshFaceIsPlanar': {
         'Mesh': Attribute(   ret_socket='planar'),
@@ -2205,23 +2264,31 @@ MESH = {
             DomSetter(     self_='geometry', fname='shade_smooth', shade_smooth='attr_value'),
             ],
     },
+    
+    # New V3.5
+    
+    'GeometryNodeEdgesToFaceGroups': {
+        'Mesh' : Attribute(ret_socket='face_group_id'),
+        'Edge' : DomAttribute(fname='to_face_groups', boundary_edges='self.selection', ret_socket='face_group_id'),
+    },
+    
 }
 
 MESH_PRIMITIVES = {
     'GeometryNodeMeshCone': {
-        'Mesh': Static(fname='Cone', ret_socket=('mesh', 'top', 'bottom', 'side'), ret_class=('Mesh', None, None, None))
+        'Mesh': Static(fname='Cone')
     },
     'GeometryNodeMeshCube': {
-        'Mesh': Constructor(fname='Cube', ret_socket='mesh')
+        'Mesh': Constructor(fname='Cube')
     },
     'GeometryNodeMeshCylinder': {
-        'Mesh': Static(fname='Cylinder', ret_socket=('mesh', 'top', 'bottom', 'side'), ret_class=('Mesh', None, None, None))
+        'Mesh': Static(fname='Cylinder')
     },
     'GeometryNodeMeshGrid': {
-        'Mesh': Constructor(fname='Grid', ret_socket='mesh')
+        'Mesh': Constructor(fname='Grid')
     },
     'GeometryNodeMeshIcoSphere': {
-        'Mesh': Constructor(fname='IcoSphere', ret_socket='mesh')
+        'Mesh': Constructor(fname='IcoSphere')
     },
     'GeometryNodeMeshCircle': {
         'Mesh': Constructor(fname='Circle', ret_socket='mesh')
@@ -2237,7 +2304,7 @@ MESH_PRIMITIVES = {
             ],
     },
     'GeometryNodeMeshUVSphere': {
-        'Mesh': Constructor(fname='UVSphere', ret_socket='mesh'),
+        'Mesh': Constructor(fname='UVSphere'),
     },
 }
 
@@ -2828,7 +2895,7 @@ UTILITIES = {
             Static(ret_socket='value', fname='random_boolean', data_type="'BOOLEAN'",      min=None, max=None),
             ],
         'Boolean': Constructor(fname='Random', ret_socket='value', data_type="'BOOLEAN'",      min=None, max=None),
-        'Integer': Constructor(fname='Random', ret_socket='value', data_type="'IN'",           probability=None),
+        'Integer': Constructor(fname='Random', ret_socket='value', data_type="'INT'",           probability=None),
         'Float'  : Constructor(fname='Random', ret_socket='value', data_type="'FLOAT'",        probability=None),
         'Vector' : Constructor(fname='Random', ret_socket='value', data_type="'FLOAT_VECTOR'", probability=None),
         
