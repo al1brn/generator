@@ -1361,7 +1361,7 @@ class ClassGenerator(dict):
             
             f.write(_1_ + "geometry   = tree.ig\n")
 
-            f.write(_1_ + "mesh       = gn.Mesh.Cube()\n")
+            f.write(_1_ + "mesh       = gn.Mesh.Cube().mesh\n")
             f.write(_1_ + "curve      = gn.Curve.Circle()\n")
             f.write(_1_ + "points     = gn.Points.Points()\n")
             f.write(_1_ + "instances  = gn.Instances.InstanceOnPoints(points=points)\n")
@@ -2152,7 +2152,7 @@ MATERIAL = {
     },
     'GeometryNodeSetMaterial': {
         ('Mesh', 'Points', 'Volume'): StackMethod(self_='geometry'),
-        ('Face', 'Points'):   [
+        ('Face', 'CloudPoint'):   [
             DomStackMethod(self_='geometry'),
             PropReadError(fname='material', class_name='Domain'),
             DomSetter(fname='material', self_='geometry', material='attr_value'),
@@ -3107,7 +3107,7 @@ V36 = {
     },
     'GeometryNodeOffsetSDFVolume': {
         'Volume': StackMethod(   fname='offset_sdf_volume', self_='volume', ret_socket='volume'),
-        'Points': DomStackMethod(fname='offset_sdf_volume', self_='volume', ret_socket='volume'),
+        #'PointCloud': DomStackMethod(fname='offset_sdf_volume', self_='volume', ret_socket='volume'),
     },
     'GeometryNodePointsToSDFVolume': {
         'Points': Method(   fname='to_sdf_volume', self_='points', ret_socket='volume', ret_class='Volume'),
