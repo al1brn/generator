@@ -95,12 +95,12 @@ class Generator:
         self.body         = None                # replace the body generation by user source code
         self.body_start   = None                # first lines of code
         
-        
         # Jul 2023 : ret_socket and ret_class as tuyple disabled
         # When several sockets exist, the node is returned
         
         self.ret_socket_  = None                # socket to return, returns node if None. Can be a tuple
         self.ret_class_   = None                # type of the return socket. Ignore if socket is None. must be a tuple if ret_socket is tuple.
+        self.ret_node     = None                # return the node rather than a socket
         self.cache        = False               # use a cache for the node
         self.dtype        = None                # (data_type, value, color) implements: data_type = self.value_data_type(argument, data_type, color)
         
@@ -195,6 +195,18 @@ class Generator:
             self.ret_class_ = None
         else:
             self.ret_class_ = value
+
+    # ----------------------------------------------------------------------------------------------------
+    # Return the node or a socket
+    
+    def return_node(self, node):
+        if self.ret_node is None:
+            if self.ret_socket is None:
+                return True if node.output_sockets_count > 1 else False
+            else:
+                return False
+        else:
+            return self.ret_node
     
     # ----------------------------------------------------------------------------------------------------
     # Indentation
@@ -221,7 +233,6 @@ class Generator:
         
         else:
             return self.decorator
-    
 
     # ----------------------------------------------------------------------------------------------------
     # Source code to create the name:
@@ -320,13 +331,16 @@ class Generator:
                 
         # ----- Returns
         
-        if isinstance(self.ret_socket, tuple):
+        if isinstance(self.ret_socket, tuple) or self.return_node(node):
             yield f"![Node Image]({node.node_image_ref})\n\n"
         
         if self.com_ret is None:
             if self.decorator != 'setter':
                 yield f"#### Returns:\n"
-                if self.ret_socket is None:
+                if self.return_node(node):
+                    yield f"- node with sockets {list(node.outputs.unames.keys())}\n"
+                    
+                elif self.ret_socket is None:
                     if self.stack:
                         yield "- self\n"
                     else:
@@ -474,7 +488,6 @@ class Generator:
         # ----- Attribute
         # attribute function returns a node
 
-        snode = f"{self.node_call_str(node)}"
         if attribute_func is not None:
             snode = f"self.{attribute_func}({snode})"
             
@@ -488,7 +501,7 @@ class Generator:
             snode = f"self._c_{cache_name}"
             
         # ----- Stack
-        # stack function returns a socket
+        # stack function returns a socket or a node
             
         if stack_func is not None:
             ssock = f"self.{stack_func}({snode})"
@@ -500,7 +513,10 @@ class Generator:
             if name not in node.outputs.unames.keys():
                 raise Exception(f"Node {node.bl_idname}: '{name}' is not a valid output socket name in {list(node.outputs.unames.keys())}")
         
-        if self.ret_socket is None:
+        if self.return_node(node):
+            sret = snode
+            
+        elif self.ret_socket is None:
             sret = snode if ssock is None else ssock
             
         elif isinstance(self.ret_socket, tuple):
@@ -2497,81 +2513,81 @@ TEXT = {
 
 TEXTURE = {
     'ShaderNodeTexBrick': {
-        'Texture': Static(fname='brick', ret_socket=('color', 'fac')),
+        'Texture': Constructor(fname='Brick', ret_socket=('color', 'fac')),
     },
     'ShaderNodeTexChecker': {
-        'Texture': Static(fname='checker', ret_socket=('color', 'fac')),
+        'Texture': Constructor(fname='Checker', ret_socket=('color', 'fac')),
     },
     'ShaderNodeTexGradient': {
         'Texture': [
-            Static(fname='gradient',                  ret_socket=('color', 'fac')),
-            Static(fname='gradient_linear',           ret_socket=('color', 'fac'), gradient_type="'LINEAR'"),
-            Static(fname='gradient_quadratic',        ret_socket=('color', 'fac'), gradient_type="'QUADRATIC'"),
-            Static(fname='gradient_easing',           ret_socket=('color', 'fac'), gradient_type="'EASING'"),
-            Static(fname='gradient_diagonal',         ret_socket=('color', 'fac'), gradient_type="'DIAGONAL'"),
-            Static(fname='gradient_spherical',        ret_socket=('color', 'fac'), gradient_type="'SPHERICAL'"),
-            Static(fname='gradient_quadratic_sphere', ret_socket=('color', 'fac'), gradient_type="'QUADRATIC_SPHERE'"),
-            Static(fname='gradient_radial',           ret_socket=('color', 'fac'), gradient_type="'RADIAL'"),
+            Constructor(fname='Gradient',                  ret_socket=('color', 'fac')),
+            Constructor(fname='GradientLinear',           ret_socket=('color', 'fac'), gradient_type="'LINEAR'"),
+            Constructor(fname='GradientQuadratic',        ret_socket=('color', 'fac'), gradient_type="'QUADRATIC'"),
+            Constructor(fname='GradientEeasing',           ret_socket=('color', 'fac'), gradient_type="'EASING'"),
+            Constructor(fname='GradientDiagonal',         ret_socket=('color', 'fac'), gradient_type="'DIAGONAL'"),
+            Constructor(fname='GradientSpherical',        ret_socket=('color', 'fac'), gradient_type="'SPHERICAL'"),
+            Constructor(fname='GradientQuadratic_sphere', ret_socket=('color', 'fac'), gradient_type="'QUADRATIC_SPHERE'"),
+            Constructor(fname='GradientRadial',           ret_socket=('color', 'fac'), gradient_type="'RADIAL'"),
             ],
     },
     'GeometryNodeImageTexture': {
-        'Texture': Static(fname='image', ret_socket=('color', 'alpha')),
+        'Texture': Constructor(fname='Image', ret_socket=('color', 'alpha')),
         'Image'  : Method(fname='texture', self_='image', ret_socket=('color', 'alpha')),
     },
     'ShaderNodeTexMagic': {
-        'Texture': Static(fname='magic', ret_socket=('color', 'fac')),
+        'Texture': Constructor(fname='Magic', ret_socket=('color', 'fac')),
     },
     'ShaderNodeTexMusgrave': {
-        'Texture': Static(fname='musgrave', ret_socket='fac'),
+        'Texture': Constructor(fname='Musgrave', ret_socket='fac'),
     },
     'ShaderNodeTexNoise': {
         'Texture': [
-            Static(fname='noise',    ret_socket=('color', 'fac')),
-            Static(fname='noise_1D', ret_socket=('color', 'fac'), noise_dimensions="'1D'", vector=None),
-            Static(fname='noise_2D', ret_socket=('color', 'fac'), noise_dimensions="'2D'", w=None),
-            Static(fname='noise_3D', ret_socket=('color', 'fac'), noise_dimensions="'3D'", w=None),
-            Static(fname='noise_4D', ret_socket=('color', 'fac'), noise_dimensions="'4D'"),
+            Constructor(fname='Noise',    ret_socket=('color', 'fac')),
+            Constructor(fname='Noise1D', ret_socket=('color', 'fac'), noise_dimensions="'1D'", vector=None),
+            Constructor(fname='Noise2D', ret_socket=('color', 'fac'), noise_dimensions="'2D'", w=None),
+            Constructor(fname='Noise3D', ret_socket=('color', 'fac'), noise_dimensions="'3D'", w=None),
+            Constructor(fname='Noise4D', ret_socket=('color', 'fac'), noise_dimensions="'4D'"),
             ],
     },
     'ShaderNodeTexVoronoi': {
         'Texture': [
-            Static(fname='voronoi',    ret_socket=('distance', 'color', 'position', 'w')),
-            Static(fname='voronoi_1D', ret_socket=('distance', 'color', 'w'),             vector=None),
-            Static(fname='voronoi_2D', ret_socket=('distance', 'color', 'position'),      w=None),
-            Static(fname='voronoi_3D', ret_socket=('distance', 'color', 'position'),      w=None),
-            Static(fname='voronoi_4D', ret_socket=('distance', 'color', 'position', 'w')),
+            Constructor(fname='Voronoi',    ret_socket=('distance', 'color', 'position', 'w')),
+            Constructor(fname='Voronoi1D', ret_socket=('distance', 'color', 'w'),             vector=None),
+            Constructor(fname='Voronoi2D', ret_socket=('distance', 'color', 'position'),      w=None),
+            Constructor(fname='Voronoi3D', ret_socket=('distance', 'color', 'position'),      w=None),
+            Constructor(fname='Voronoi4D', ret_socket=('distance', 'color', 'position', 'w')),
             ],
     },
     'ShaderNodeTexWave': {
         'Texture': [
-            Static(fname='wave', ret_socket=('color', 'fac')),
-            Static(fname='wave_bands', ret_socket=('color', 'fac'), wave_type="'BANDS'", rings_direction="'X'",
+            Constructor(fname='Wave', ret_socket=('color', 'fac')),
+            Constructor(fname='WaveBands', ret_socket=('color', 'fac'), wave_type="'BANDS'", rings_direction="'X'",
                           arg_rename={'bands_direction': 'direction'}),
-            Static(fname='wave_rings', ret_socket=('color', 'fac'), wave_type="'RINGS'", bands_direction="'X'",
+            Constructor(fname='WaveRings', ret_socket=('color', 'fac'), wave_type="'RINGS'", bands_direction="'X'",
                           arg_rename={'rings_direction': 'direction'}),
         
-            Static(fname='wave_bands_sine', ret_socket=('color', 'fac'), wave_type="'BANDS'", rings_direction="'X'", wave_profile="'SIN'",
+            Constructor(fname='WaveBands_sine', ret_socket=('color', 'fac'), wave_type="'BANDS'", rings_direction="'X'", wave_profile="'SIN'",
                           arg_rename={'bands_direction': 'direction'}),
-            Static(fname='wave_bands_saw', ret_socket=('color', 'fac'), wave_type="'BANDS'", rings_direction="'X'", wave_profile="'SAW'",
+            Constructor(fname='WaveBands_saw', ret_socket=('color', 'fac'), wave_type="'BANDS'", rings_direction="'X'", wave_profile="'SAW'",
                           arg_rename={'bands_direction': 'direction'}),
-            Static(fname='wave_bands_triangle', ret_socket=('color', 'fac'), wave_type="'BANDS'", rings_direction="'X'", wave_profile="'TRI'",
+            Constructor(fname='WaveBands_triangle', ret_socket=('color', 'fac'), wave_type="'BANDS'", rings_direction="'X'", wave_profile="'TRI'",
                           arg_rename={'bands_direction': 'direction'}),
 
-            Static(fname='wave_rings_sine', ret_socket=('color', 'fac'), wave_type="'RINGS'", bands_direction="'X'", wave_profile="'SIN'",
+            Constructor(fname='WaveRings_sine', ret_socket=('color', 'fac'), wave_type="'RINGS'", bands_direction="'X'", wave_profile="'SIN'",
                           arg_rename={'rings_direction': 'direction'}),
-            Static(fname='wave_rings_saw', ret_socket=('color', 'fac'), wave_type="'RINGS'", bands_direction="'X'", wave_profile="'SAW'",
+            Constructor(fname='WaveRings_saw', ret_socket=('color', 'fac'), wave_type="'RINGS'", bands_direction="'X'", wave_profile="'SAW'",
                           arg_rename={'rings_direction': 'direction'}),
-            Static(fname='wave_rings_triangle', ret_socket=('color', 'fac'), wave_type="'RINGS'", bands_direction="'X'", wave_profile="'TRI'",
+            Constructor(fname='WaveRings_triangle', ret_socket=('color', 'fac'), wave_type="'RINGS'", bands_direction="'X'", wave_profile="'TRI'",
                           arg_rename={'rings_direction': 'direction'}),
             ],
     },
     'ShaderNodeTexWhiteNoise': {
         'Texture': [
-            Static(fname='white_noise',    ret_socket=('value', 'color')),
-            Static(fname='white_noise_1D', ret_socket=('value', 'color'), noise_dimensions = "'1D'", vector=None),
-            Static(fname='white_noise_2D', ret_socket=('value', 'color'), noise_dimensions = "'2D'", w=None),
-            Static(fname='white_noise_3D', ret_socket=('value', 'color'), noise_dimensions = "'3D'", w=None),
-            Static(fname='white_noise_4D', ret_socket=('value', 'color'), noise_dimensions = "'3D'"),
+            Constructor(fname='WhiteNoise',    ret_socket=('value', 'color')),
+            Constructor(fname='WhiteNoise1D', ret_socket=('value', 'color'), noise_dimensions = "'1D'", vector=None),
+            Constructor(fname='WhiteNoise2D', ret_socket=('value', 'color'), noise_dimensions = "'2D'", w=None),
+            Constructor(fname='WhiteNoise3D', ret_socket=('value', 'color'), noise_dimensions = "'3D'", w=None),
+            Constructor(fname='WhiteNoise4D', ret_socket=('value', 'color'), noise_dimensions = "'3D'"),
             ],
     },
 }

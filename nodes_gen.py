@@ -1652,6 +1652,10 @@ class WNode:
     def output_unames(self, fixed={}):
         return self.sockets_unames(self.outputs, fixed=fixed)
     
+    @property
+    def output_sockets_count(self):
+        return len(self.output_unames())
+    
     # ====================================================================================================
     # Formatting utility
     
