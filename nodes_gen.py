@@ -498,6 +498,27 @@ NODES_MENU = {
     "group"                      : ("group"                     , "group"                                 ),
 }
 
+# ====================================================================================================
+# Output sockets data types
+
+OUTPUT_SOCKETS_CLASS = {
+    'GeometryNodeBoundBox'                     : {'bounding_box'    : 'Mesh',},
+    'GeometryNodeConvexHull'                   : {'convex_hull'     : 'Mesh',},
+    'GeometryNodeDeformCurvesOnSurface'        : {'curves'          : 'Curve',},
+    'GeometryNodeDualMesh'                     : {'dual_mesh'       : 'Mesh',},
+    'GeometryNodeEdgePathsToCurves'            : {'curves'          : 'Curve',},
+    'GeometryNodeInterpolateCurves'            : {'curves'          : 'Curve',},
+    'GeometryNodePoints'                       : {'geometry'        : 'Points',},
+    'GeometryNodeReplaceMaterial'              : {'geometry'        : 'Mesh',},
+    'GeometryNodeScaleElements'                : {'geometry'        : 'Mesh',},
+    'GeometryNodeSeparateComponents'           : {'point_cloud'     : 'Points',},
+    #'GeometryNodeSetMaterial'                  : {'geometry'        : 'Mesh',},
+    #'GeometryNodeSetMaterialIndex'             : {'geometry'        : 'Mesh',},
+    'GeometryNodeSetShadeSmooth'               : {'geometry'        : 'Mesh',},
+    'GeometryNodeSetSplineCyclic'              : {'geometry'        : 'Curve',},
+    'GeometryNodeSetSplineResolution'          : {'geometry'        : 'Curve',},
+    'GeometryNodeStringToCurves'               : {'curve_instances' : 'Instances',},
+}
 
 # ====================================================================================================
 # Some nodes need to reorder the input sockets for more natural use
@@ -564,12 +585,12 @@ def socket_name(blender_socket):
 
 class Argument:
     def __init__(self, arg_type, name, is_self=False, label=None):
-
         self.arg_type = arg_type
         self.name     = name
         self.label    = label
         self.is_self  = is_self
-        
+        self.ignore   = False
+
     @classmethod
     def Socket(cls, name, wsocket, is_self=False, label=None):
         arg         = cls('SOCKET', name, is_self=is_self, label=label)
@@ -587,6 +608,12 @@ class Argument:
 
         arg.param    = param
         arg.is_fixed = is_fixed
+        
+        # Specific params
+        
+        if isinstance(arg.value, (bpy.types.bpy_func, bpy.types.bpy_prop_collection)):
+            arg.ignore = True
+        
         return arg
         
     @classmethod
@@ -632,6 +659,9 @@ class Argument:
     @property
     def sheader(self):
         
+        if self.ignore:
+            return ""
+        
         if self.arg_type == 'CLS':
             return "cls"
         
@@ -661,6 +691,9 @@ class Argument:
 
     @property
     def scall(self):
+        
+        if self.ignore:
+            return ""
 
         if self.arg_type == 'CLS':
             return ""
@@ -691,6 +724,9 @@ class Argument:
 
         
     def scomment(self, **kwargs):
+        
+        if self.ignore:
+            return ""
         
         _, arg_rename = Arguments.extract_arg_rename(**kwargs)
         
@@ -741,6 +777,10 @@ class Argument:
     
     @property
     def splug(self):
+        
+        if self.ignore:
+            return None
+        
         if not self.is_socket or self.is_shared:
             return None
         
@@ -1133,7 +1173,7 @@ class WSocket:
     
     @property
     def name(self):
-        s = socket_name(self.bsocket).lower().replace(' ', '_')
+        s = socket_name(self.bsocket).lower().replace(' ', '_').replace('-', '_')
         if s == 'id':
             return 'ID'
         else:
@@ -1355,7 +1395,11 @@ class WNode:
        'is_registered_node_type', 'label', 'location', 'mute', 'name', 'output_template', 'outputs',
        'parent', 'poll', 'poll_instance', 'rna_type', 'select', 'show_options', 'show_preview',
        'show_texture', 'socket_value_update', 'type', 'update', 'use_custom_color',
-       'width', 'width_hidden']
+       'width', 'width_hidden',
+       # Ignore for simulation nodes
+       'pair_with_output', 'state_items',
+       
+       ]
     
     def __init__(self, bnode):
         
@@ -1366,6 +1410,17 @@ class WNode:
         self.bnode   = bnode
         self.inputs  = WSockets(self.bnode.inputs)
         self.outputs = WSockets(self.bnode.outputs)
+        
+        # Output geometry sockets class name can be defined by its name
+        # But some socket names need specifif setting
+        
+        geo_classes = OUTPUT_SOCKETS_CLASS.get(self.bnode.bl_idname, {})
+        for wsock in self.outputs:
+            class_name = geo_classes.get(wsock.name, None)
+            if class_name is not None:
+                wsock.class_name = class_name
+                
+        # Parameters
         
         self.parameters = {}
         for param_name in dir(self.bnode):
@@ -1394,7 +1449,16 @@ class WNode:
         if self.has_shared_sockets:
             self.driving_param = 'input_type' if hasattr(self.bnode, 'input_type') else 'data_type'
             
-            param = self.parameters[self.driving_param]
+            # hacks
+            if bnode.bl_idname == 'GeometryNodeSampleVolume':
+                self.driving_param = 'interpolation_mode'
+            
+            try:
+                param = self.parameters[self.driving_param]
+            except:
+                raise Exception(f"Impossible de get the driving parameter of '{bnode.bl_idname}'. '{param}' fails. Parameters are {self.parameters}")
+            
+            
             for value in param.values:
                 param.value = value
                 self.inputs.update_unames_indices(value)
@@ -1456,7 +1520,7 @@ class WNode:
             w = word.lower()
             if w == 'id':
                 w = 'ID'
-            if w == '_':
+            if w in '_':
                 s += '_'
             else:
                 if s != "":
@@ -1619,6 +1683,25 @@ class WNode:
                 
         if s != "":
             yield s + "]"
+            
+    # ====================================================================================================
+    # The geometry class
+    # Return the geometry class
+    
+    def output_geometry_class(self):
+        s = ""
+        for wsock in self.outputs:
+            if wsock.class_name in ['Geometry', 'Curve', 'Mesh', 'Points', 'Instances', 'Volume']:
+                if wsock.class_name != 'Geometry' and wsock.name.lower() == wsock.class_name.lower():
+                    continue
+                
+                if s == "":
+                    sbl = f"'{self.bnode.bl_idname}'"
+                    s = f"{sbl:42s} : " + "{"
+                sn = f"'{wsock.uname}'"
+                s += f"{sn:17s} : '{wsock.class_name}'" + ","
+                
+        return s if s == "" else s + "}," 
             
     # ====================================================================================================
     # Build the documentation
@@ -2058,6 +2141,14 @@ class WNode:
             else:
                 yield f"'{uname}' : {wsocks.index}, "
         yield "}\n"
+        
+        # ---------------------------------------------------------------------------
+        # Output sockets class
+        
+        out_classes = OUTPUT_SOCKETS_CLASS.get(self.bnode.bl_idname, None)
+        if out_classes is not None:
+            yield _2_ + "# Force class of output sockets\n"
+            yield _2_ + f"self.outsockets_classes = {out_classes}\n"
 
         # ---------------------------------------------------------------------------
         # Now that the insockets are declared, we can set the input sockets
@@ -2095,7 +2186,7 @@ class WNode:
         # ---------------------------------------------------------------------------
         # Output sockets
         
-        for name in self.outputs.unames:
+        for name, wsock in self.outputs.unames.items():
             yield _1_ + "@property"
             yield _1_ + f"def {name}(self):"
             yield _2_ + f"return self.get_output_socket('{name}')\n"
@@ -2186,7 +2277,7 @@ def create_data_sockets(fpath):
 
 
 # ----------------------------------------------------------------------------------------------------
-# Creat all the nodes in 
+# Create all the nodes
 
 def create_nodes(fpath, BNODES):
     
@@ -2335,6 +2426,22 @@ def build_geonodes_auto_doc(fpath):
                 #print(f"Documentation of {class_name}")
                 with open(fpath + f"docs/api/{class_name}.md", 'w') as f:
                     f.writelines(module.markdown(class_name))
+                    
+# ====================================================================================================
+# Check the classes of geometry output sockets
+
+def check_output_geometry_classes():
+    
+    BNODES = BNodes()
+
+    for bnode in BNODES.values():
+        wn = WNode(bnode)
+        s = wn.output_geometry_class()
+        if s != "":
+            print(s)
+    
+    
+                    
                 
                     
 # ====================================================================================================

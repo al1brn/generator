@@ -95,8 +95,12 @@ class Generator:
         self.body         = None                # replace the body generation by user source code
         self.body_start   = None                # first lines of code
         
-        self.ret_socket   = None                # socket to return, returns node if None. Can be a tuple
-        self.ret_class    = None                # type of the return socket. Ignore if socket is None. must be a tuple if ret_socket is tuple.
+        
+        # Jul 2023 : ret_socket and ret_class as tuyple disabled
+        # When several sockets exist, the node is returned
+        
+        self.ret_socket_  = None                # socket to return, returns node if None. Can be a tuple
+        self.ret_class_   = None                # type of the return socket. Ignore if socket is None. must be a tuple if ret_socket is tuple.
         self.cache        = False               # use a cache for the node
         self.dtype        = None                # (data_type, value, color) implements: data_type = self.value_data_type(argument, data_type, color)
         
@@ -167,6 +171,31 @@ class Generator:
             if self_key is not None:
                 self.kwargs[self_key] = 'self.data_socket'
                 
+    # ----------------------------------------------------------------------------------------------------
+    # Disabling ret_socket and ret_class as tuple
+    
+    @property
+    def ret_socket(self):
+        return self.ret_socket_
+
+    @ret_socket.setter
+    def ret_socket(self, value):
+        if isinstance(value, tuple):
+            self.ret_socket_ = None
+        else:
+            self.ret_socket_ = value
+    
+    @property
+    def ret_class(self):
+        return self.ret_class_
+
+    @ret_class.setter
+    def ret_class(self, value):
+        if isinstance(value, tuple):
+            self.ret_class_ = None
+        else:
+            self.ret_class_ = value
+    
     # ----------------------------------------------------------------------------------------------------
     # Indentation
         
@@ -976,7 +1005,8 @@ class ClassGenerator(dict):
             f.write("pi = 3.141592653589793\n\n")
             
             f.write("from geonodes.core.node import Node, GroupInput, GroupOutput, Frame, SceneTime, Group\n")
-            f.write("from geonodes.core.tree import Tree, Trees\n\n")
+            f.write("from geonodes.core.tree import Tree, Trees\n")
+            f.write("from geonodes.core.simulation import Simulation\n\n")
             f.write("from geonodes.nodes import nodes\n\n")
             
             for line in self.gen_classes_import():
@@ -1219,7 +1249,7 @@ class ClassGenerator(dict):
             'Texture'           : TEXTURE,
             'Utilities'         : UTILITIES,
             'UV'                : UV,
-            'Vector'            : VECTOR,
+            'Vector'            : VECTOR_IMPL,
             'Volume'            : VOLUME,
             }
                     
@@ -1928,7 +1958,10 @@ GEOMETRY = {
             DomMethod(self_='geometry', fname='separate', ret_socket=('selection', 'inverted')),
     },
     'GeometryNodeTransform': {
-        'Geometry': StackMethod(self_='geometry'),
+        'Geometry': [
+            StackMethod(self_='geometry'),
+            StackMethod(self_='geometry', fname='transform'),
+            ]
     },
     'GeometryNodeSetID': {
         'Geometry': StackMethod(self_='geometry'),
@@ -1944,6 +1977,7 @@ GEOMETRY = {
             DomSetter(     self_='geometry', fname='position', position='attr_value', offset=None),
             ],
     },
+    
 }
 
 INPUT = {
@@ -2117,8 +2151,8 @@ MATERIAL = {
         'Domain':   DomAttribute(ret_socket='selection'),
     },
     'GeometryNodeSetMaterial': {
-        'Geometry': StackMethod(self_='geometry'),
-        ('Face', 'Spline'):   [
+        ('Mesh', 'Points', 'Volume'): StackMethod(self_='geometry'),
+        ('Face', 'Points'):   [
             DomStackMethod(self_='geometry'),
             PropReadError(fname='material', class_name='Domain'),
             DomSetter(fname='material', self_='geometry', material='attr_value'),
@@ -2445,8 +2479,8 @@ TEXT = {
         'String':   Property(fname='length', self_='string', ret_socket='length'),
     },
     'GeometryNodeStringToCurves': {
-        'functions': Function(ret_socket=('curve_instances', 'line', 'pivot_point'), ret_class=('Instances', None, None)),
-        'String':   Method(fname='to_curves', self_='string', ret_socket=('curve_instances', 'line', 'pivot_point'), ret_class=('Instances', None, None)),
+        'functions': Function(), #ret_socket=('curve_instances', 'line', 'pivot_point'), ret_class=('Instances', None, None)),
+        'String':   Method(fname='to_curves', self_='string'), #, ret_socket=('curve_instances', 'line', 'pivot_point'), ret_class=('Instances', None, None)),
     },
     'FunctionNodeValueToString': {
         'functions' : Function(ret_socket='string'),
@@ -2969,7 +3003,7 @@ UV= {
     },
 }
 
-VECTOR = {
+VECTOR_IMPL = {
     'ShaderNodeCombineXYZ': {
         'Vector': Constructor(fname='Combine', ret_socket='vector'),
     },
@@ -3056,6 +3090,45 @@ VOLUME = {
 }
 
 
+V36 = {
+    'GeometryNodeIndexOfNearest': {
+        'Geometry': PropAttribute(),
+        'Domain'  : DomPropAttribute(),
+    },
+    'GeometryNodeInputSignedDistance': {
+        'Geometry': PropAttribute(ret_socket='signed_distance'),
+    },    
+    'GeometryNodeMeanFilterSDFVolume': {
+        'Volume': Method(self_='volume', fname='mean_filter_sdf_volume', ret_socket='volume', ret_class='Volume'),
+    },
+    'GeometryNodeMeshToSDFVolume': {
+        'Mesh':   Method(   fname='to_sdf_volume', self_='mesh', ret_socket='volume', ret_class='Volume'),
+        'Vertex': DomMethod(fname='to_sdf_volume', self_='mesh', ret_socket='volume', ret_class='Volume'),
+    },
+    'GeometryNodeOffsetSDFVolume': {
+        'Volume': StackMethod(   fname='offset_sdf_volume', self_='volume', ret_socket='volume'),
+        'Points': DomStackMethod(fname='offset_sdf_volume', self_='volume', ret_socket='volume'),
+    },
+    'GeometryNodePointsToSDFVolume': {
+        'Points': Method(   fname='to_sdf_volume', self_='points', ret_socket='volume', ret_class='Volume'),
+        'CloudPoint':  DomMethod(fname='to_sdf_volume', self_='points', ret_socket='volume', ret_class='Volume'),
+    },
+    'GeometryNodeSDFVolumeSphere': {
+        'Volume': Constructor(fname='SdfSphere', ret_socket='volume'),
+    },
+    'GeometryNodeSampleVolume': {
+        'Volume': [
+            Method(self_='volume', fname='sample',         ret_socket='value'),
+            Method(self_='volume', fname='sample_float',   ret_socket='value', grid_type=FLOAT),
+            Method(self_='volume', fname='sample_vector',  ret_socket='value', grid_type=FLOAT_VECTOR),
+            Method(self_='volume', fname='sample_integer', ret_socket='value', grid_type=INT),
+            Method(self_='volume', fname='sample_boolean', ret_socket='value', grid_type=BOOLEAN),
+            ],
+    },
+
+}
+
+
 # ----------------------------------------------------------------------------------------------------
 # All the generators
 
@@ -3078,8 +3151,9 @@ ALL = {
        **TEXTURE,
        **UTILITIES,
        **UV,
-       **VECTOR,
+       **VECTOR_IMPL,
        **VOLUME,
+       **V36,
        }
 
 def get_class_generators(wnodes):

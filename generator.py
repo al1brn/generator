@@ -1086,7 +1086,7 @@ class WSocket:
     
     @property
     def name(self):
-        s = socket_name(self.bsocket).lower().replace(' ', '_')
+        s = socket_name(self.bsocket).lower().replace(' ', '_').replace('-', '_')
         if s == 'id':
             return 'ID'
         else:
@@ -1406,7 +1406,7 @@ class WNode:
     
     @property
     def blender_ref_name(self):
-        return self.bnode.name.lower().replace(' ', '_')
+        return self.bnode.name.lower().replace(' ', '_').replace('-', '_')
     
     @property
     def blender_ref_menu(self):
@@ -2438,11 +2438,7 @@ def create_geonodes(fpath):
     print('Generation completed')
     print()
     print('-'*80)
-    print("NOTE: if new nodes are created, don't forget to run node_sizes():")
-    print("Node dimensions are intizalized to zero. To update the property correctly, go")
-    print("in the geometry nodes editor and then back to the script editor.")
-    print("Lauch generator.node_sizes() WITHOUT LAUNCHING create_geonodes AGAIN!")
-    print("... hope it works.")
+    print("NOTE: if new nodes are created, don't forget to run gen_node_dims() in module geonodes.core.arrange.")
     
     
     return
