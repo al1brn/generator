@@ -1956,7 +1956,7 @@ GEOMETRY = {
     },
     'GeometryNodeSampleNearest': {
         'Geometry': Method(self_='geometry', ret_socket='index'),
-        ('Vertex', 'Edge', 'Face', 'Corner'): DomMethod(self_='geometry', ret_socket='index'),
+        ('Vertex', 'Edge', 'Face', 'Corner', 'CloudPoint'): DomMethod(self_='geometry', ret_socket='index'),
     },
     'GeometryNodeSeparateComponents': {
         'Geometry': [
