@@ -1916,17 +1916,17 @@ GEOMETRY = {
     },
     'GeometryNodeProximity': {
         'Geometry' : [
-            Attribute(fname='proximity',        ret_socket='distance'),
-            Attribute(fname='proximity_points', ret_socket='distance', target_element="'POINTS'"),
-            Attribute(fname='proximity_edges',  ret_socket='distance', target_element="'EDGES'"),
-            Attribute(fname='proximity_faces',  ret_socket='distance', target_element="'FACES'"),
+            Attribute(fname='proximity',        ),
+            Attribute(fname='proximity_points', target_element="'POINTS'"),
+            Attribute(fname='proximity_edges',  target_element="'EDGES'"),
+            Attribute(fname='proximity_faces',  target_element="'FACES'"),
             ],
         ('Vertex', 'ControlPoint', 'CloudPoint') :
-            DomAttribute(fname='proximity', ret_socket='distance', target_element="'POINTS'"),
+            DomAttribute(fname='proximity', target_element="'POINTS'"),
         'Edge':
-            DomAttribute(fname='proximity', ret_socket='distance', target_element="'EDGES'"),
+            DomAttribute(fname='proximity', target_element="'EDGES'"),
         'Face':
-            DomAttribute(fname='proximity', ret_socket='distance', target_element="'FACES'"),
+            DomAttribute(fname='proximity', target_element="'FACES'"),
     },
     'GeometryNodeGeometryToInstance': {
         'functions': Function(ret_socket='instances', ret_class='Instances'),
@@ -1990,7 +1990,11 @@ GEOMETRY = {
         'Geometry': StackMethod(self_='geometry'),
         'Domain'  : [
             DomStackMethod(self_='geometry'),
-            DomSetter(     self_='geometry', fname='position', position='attr_value', offset=None),
+            DomSetter(     self_='geometry', fname='position', position='attr_value', offset=None, 
+                      body_start = "if attr_value is None: return self",
+                      ),
+            PropReadError(fname='position_offset', class_name='Domain'),
+            DomSetter(fname='position_offset', stack=True, self_='geometry', position=None, offset='attr_value'),
             ],
     },
     
@@ -3108,8 +3112,8 @@ VOLUME = {
 
 V36 = {
     'GeometryNodeIndexOfNearest': {
-        'Geometry': PropAttribute(),
-        'Domain'  : DomPropAttribute(),
+        'Geometry': Attribute(),
+        'Domain'  : DomAttribute(),
     },
     'GeometryNodeInputSignedDistance': {
         'Geometry': PropAttribute(ret_socket='signed_distance'),
