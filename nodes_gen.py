@@ -1428,10 +1428,13 @@ class WNode:
             # type is valid for Node FunctionNodeRotateEuler
             
             ok_param = not param_name in WNode.STD_ATTRS
+            
+            # Hacks
+            
             if bnode.bl_idname == 'FunctionNodeRotateEuler' and param_name == 'type':
                 ok_param = True
                 
-            # End of hack
+            # End of hacks
             
             if ok_param:
                 param = Parameter(self, param_name)
@@ -1547,7 +1550,7 @@ class WNode:
     def blender_ref(self):
         ref = NODES_MENU.get(self.blender_ref_name)
         if ref is None:
-            print(f"CAUTION: key {self.blender_ref_name} not found")
+            print(f"OLD CAUTION: key {self.blender_ref_name} not found")
             ref = f"{self.blender_ref_name} not found"
             
         return f"https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/{ref[1]}.html"
