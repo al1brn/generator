@@ -457,17 +457,7 @@ class Generator:
             
             yield "\n"
             
-        # ----- Function calls
-        
-        if False:
-            attribute_func = None
-            if self.attribute:
-                if self.is_domain:
-                    attribute_func = "attribute_node"
-                    attr_domain    = None
-                else:
-                    attribute_func = "attribute_node"
-                    attr_domain    = 'POINT'
+        # ----- Stack function
         
         stack_func = None
         if self.stack:
@@ -494,17 +484,13 @@ class Generator:
         # ----- Attribute
         # attribute function returns a node
         
-        if True:
-            if self.attribute:
-                if self.is_domain:
-                    snode = f"self.attribute_node({snode})"
-                else:
-                    dname = self.kwargs.get('attr_domain', 'POINT')
-                    snode = f"self.attribute_node({snode}, domain='{dname}')"
-                    
-        else:
-            if attribute_func is not None:
-                snode = f"self.{attribute_func}({snode})"
+        if self.attribute:
+            if self.is_domain:
+                snode = f"self.attribute_node({snode})"
+            else:
+                if not self.domain_name in ['verts', 'faces', 'edges', 'corners', 'points', 'splines', 'insts', 'default_domain']:
+                    raise Exception(f"Invalid domain name '{self.domain_name}' for attribute '{fname}'")
+                snode = f"self.{self.domain_name}.attribute_node({snode})"
             
         # ----- Cache mechanism
         # node = ...
@@ -688,7 +674,8 @@ class DomStackMethod(StackMethod):
 # Attribute method
         
 class Attribute(Method):
-    def __init__(self, **kwargs):
+    def __init__(self, domain='default_domain', **kwargs):
+        self.domain_name = domain
         kws = {**kwargs}
         if not 'self_' in kws:
             kws['self_'] = None
@@ -696,8 +683,8 @@ class Attribute(Method):
         super().__init__(attribute=True, **kws)
         
 class PropAttribute(Attribute):
-    def __init__(self, **kwargs):
-        super().__init__(decorator="@property", **kwargs)
+    def __init__(self, domain='default_domain', **kwargs):
+        super().__init__(domain=domain, decorator="@property", **kwargs)
         
 class DomAttribute(Method):
     def __init__(self, **kwargs):
@@ -1023,93 +1010,10 @@ class ClassGenerator(dict):
         
         nav_menu = "[main](../index.md) - [nodes](nodes.md) - [nodes menus](nodes_menus.md)"
         doc_header = f"> {nav_menu}\n\n"
-        
-        if False:
-            print("Data classes api...")
-            
-            # ----------------------------------------------------------------------------------------------------
-            # Classes documentation
-            
-            for class_name in self:
-                
-                # ----------------------------------------------------------------------------------------------------
-                # Read the global and final description
-                
-                try:
-                    descr_file_name = f"{folder}docs/{class_name}.md"
-                    with open(descr_file_name, 'r') as f:
-                        descr = f.readlines()
-                except:
-                    descr = None
-                    
-                try:
-                    ex_file_name = f"{folder}docs/examples_{class_name}.md"
-                    with open(ex_file_name, 'r') as f:
-                        examples = f.readlines()
-                except:
-                    examples = None
-                    
-                # ----------------------------------------------------------------------------------------------------
-                # Read the global and final description
-    
-                file_name = f"{folder}docs/api/{class_name}.md"
-    
-                with open(file_name, 'w') as f:
-                    if class_name == 'functions':
-                        f.write("# Functions\n\n")
-                    else:
-                        f.write(f"# class {class_name}\n\n")
-                        
-                    f.write(doc_header)
-                    
-                    # ----- Description
-                    
-                    if descr is not None:
-                        f.writelines(descr)
-                        
-                    if examples is not None:
-                        f.write("> see [examples](#examples)\n\n")
-                        
-                    # ----- TOC
-                    
-                    methods = self.class_methods(class_name)
-                    
-                    for deco, title in zip(["@property", "@classmethod", "@staticmethod", None], ["Properties", "Class methods", "Static methods", "Methods"]):
-                        
-                        ok_title = False
-                        for _, gen, wnode in methods:
-                            if gen.decorator != deco:
-                                continue
-                            
-                            if not ok_title:
-                                f.write(f"## {title}\n\n")
-                                ok_title = True                             
-                                
-                            f.write(f"- [{gen.fname(wnode)}](#{gen.anchor(wnode)})\n")
-                            
-                        f.write("\n")
-                    
-                    # ----- Documentation OLD
-                    
-                    if False:
-                        for _, gen, wnode in methods:
-                            ok_lines = False
-                            for line in gen.gen_api_doc(wnode):
-                                if line is not None:
-                                    f.write(line.replace('CLASS_NAME', class_name))
-                                    ok_lines = True
-                                    
-                            if ok_lines:
-                                f.write(f"<sub>Go to [top](#class-{class_name}) - {nav_menu}</sub>\n\n")
-                            
-                    # ----- Examples
-                    
-                    if examples is not None:
-                        f.writelines(examples)
                         
         # ----------------------------------------------------------------------------------------------------
         # Nodes are listed in alphabetical order and in the Blender add menu order
-        # Let's share the way they are listes
+        # Let's share the way they are listed
         
         def list_nodes(nodes):
             
@@ -1417,7 +1321,7 @@ ATTRIBUTE = {
     
     'GeometryNodeCaptureAttribute': {
         'Geometry': [
-            StackMethod(self_='geometry', ret_socket='attribute',    dtype=('data_type', 'value')),
+            StackMethod(self_='geometry', ret_socket='attribute', dtype=('data_type', 'value')),
             Static(fname='capture_attribute_node'), # Used to automatically capture attributes
             ],
         'Domain':   DomStackMethod(self_='geometry', ret_socket='attribute', dtype=('data_type', 'value')),
@@ -1803,15 +1707,15 @@ CURVE_PRIMITIVES = {
 
 CURVE_TOPOLOGY = {
     'GeometryNodeOffsetPointInCurve': {
-        'Curve':        Attribute(   fname='offset_point', attr_domain='POINT'),
+        'Curve':        Attribute(domain='points', fname='offset_point'),
         'ControlPoint': DomAttribute(fname='offset', point_index='self.selection_index'),
     },
     'GeometryNodeCurveOfPoint': {
-        'Curve':        Attribute(   fname='curve_of_point', attr_domain='POINT'),
+        'Curve':        Attribute(domain='points', fname='curve_of_point'),
         'ControlPoint': DomAttribute(fname='curve', point_index='self.selection_index'),
     },
     'GeometryNodePointsOfCurve': {
-        'Curve':  Attribute(   fname='points_of_curve', attr_domain='CURVE'),
+        'Curve':  Attribute(domain='splines', fname='points_of_curve'),
         'Spline': DomAttribute(fname='points', curve_index='self.selection_index'),
     },
 }
@@ -1858,18 +1762,30 @@ GEOMETRY = {
         'Spline': DomStackMethod(fname='duplicate', ret_socket='duplicate_index', self_='geometry', domain="'SPLINE'"),
     },
     'GeometryNodeProximity': {
-        'Geometry' : [
-            Attribute(fname='proximity', attr_domain='POINT'),
-            Attribute(fname='proximity_points', target_element="'POINTS'", attr_domain='POINT'),
-            Attribute(fname='proximity_edges',  target_element="'EDGES'",  attr_domain='POINT'),
-            Attribute(fname='proximity_faces',  target_element="'FACES'",  attr_domain='POINT'),
+        ('Mesh', 'Curve', 'Points', 'Instances') : [
+            Attribute(fname='proximity'),
+            Attribute(fname='proximity_points', target_element="'POINTS'"),
+            Attribute(fname='proximity_edges',  target_element="'EDGES'"),
+            Attribute(fname='proximity_faces',  target_element="'FACES'"),
             ],
-        ('Vertex', 'ControlPoint', 'CloudPoint') :
+        ('Vertex', 'ControlPoint', 'CloudPoint') : [
             DomAttribute(fname='proximity'),
-        'Edge':
+            DomAttribute(fname='proximity_points', target_element="'POINTS'"),
+            DomAttribute(fname='proximity_edges',  target_element="'EDGES'"),
+            DomAttribute(fname='proximity_faces',  target_element="'FACES'"),
+            ],
+        'Edge': [
             DomAttribute(fname='proximity'),
-        'Face':
+            DomAttribute(fname='proximity_points', target_element="'POINTS'"),
+            DomAttribute(fname='proximity_edges',  target_element="'EDGES'"),
+            DomAttribute(fname='proximity_faces',  target_element="'FACES'"),
+            ],
+        'Face': [
             DomAttribute(fname='proximity'),
+            DomAttribute(fname='proximity_points', target_element="'POINTS'"),
+            DomAttribute(fname='proximity_edges',  target_element="'EDGES'"),
+            DomAttribute(fname='proximity_faces',  target_element="'FACES'"),
+            ],
     },
     'GeometryNodeGeometryToInstance': {
         'functions': Function(ret_socket='instances', ret_class='Instances'),
@@ -1887,10 +1803,15 @@ GEOMETRY = {
             ],
     },
     'GeometryNodeRaycast': {
-        'Geometry' : [
+        ('Mesh', 'Curve', 'Points', 'Instances') : [
             Attribute(dtype=('data_type', 'attribute')),
             Attribute(fname='raycast_interpolated', dtype=('data_type', 'attribute'), mapping="'INTERPOLATED'"),
             Attribute(fname='raycast_nearest',      dtype=('data_type', 'attribute'), mapping="'NEAREST'"),
+            ],
+        'Domain': [
+            DomAttribute(dtype=('data_type', 'attribute')),
+            DomAttribute(fname='raycast_interpolated', dtype=('data_type', 'attribute'), mapping="'INTERPOLATED'"),
+            DomAttribute(fname='raycast_nearest',      dtype=('data_type', 'attribute'), mapping="'NEAREST'"),
             ],
     },
     'GeometryNodeSampleIndex': {
@@ -1985,18 +1906,18 @@ INPUT = {
         'Vector': Constructor(fname='Vector', ret_socket='vector'),
     },
     'GeometryNodeInputID': {
-        'Geometry': PropAttribute(   fname='ID', ret_socket='ID'),
+        ('Mesh', 'Curve', 'Points', 'Instances'): PropAttribute(fname='ID', ret_socket='ID'),
         'Domain'  : DomPropAttribute(fname='ID', ret_socket='ID'),
     },
     'GeometryNodeInputIndex': {
-        'Geometry': PropAttribute(fname='index', ret_socket='index'),
+        ('Mesh', 'Curve', 'Points', 'Instances'): PropAttribute(fname='index', ret_socket='index'),
         'Domain'  : [
             DomPropAttribute(fname='index', ret_socket='index'),
             DomPropAttribute(fname='domain_index', ret_socket='index'),
             ],
     },
     'GeometryNodeInputNamedAttribute': {
-        'Geometry': [
+        ('Mesh', 'Curve', 'Points', 'Instances') : [
             Attribute(fname='named_attribute'),
             Attribute(fname='named_float',      ret_socket='attribute', data_type=FLOAT),
             Attribute(fname='named_integer',    ret_socket='attribute', data_type=INT),
@@ -2014,16 +1935,17 @@ INPUT = {
             ],
     },
     'GeometryNodeInputNormal': {
-        'Geometry': PropAttribute(   fname='normal', ret_socket='normal', attr_domain='FACE'),
+        ('Mesh', 'Curve', 'Points', 'Instances'): PropAttribute(fname='normal', ret_socket='normal'),
         'Domain'  : DomPropAttribute(fname='normal', ret_socket='normal'),
+        # Explicit for spline because of spline normal setter 
         'Spline'  : DomPropAttribute(fname='normal', ret_socket='normal'),
     },
     'GeometryNodeInputPosition': {
-        'Geometry': PropAttribute(   fname='position', ret_socket='position'),
+        ('Mesh', 'Curve', 'Points', 'Instances'): PropAttribute(fname='position', ret_socket='position'),
         'Domain'  : DomPropAttribute(fname='position', ret_socket='position'),
     },
     'GeometryNodeInputRadius': {
-        'Geometry'     : PropAttribute(fname='radius',    ret_socket='radius'),
+        ('Curve', 'Points') : PropAttribute(fname='radius',    ret_socket='radius'),
         'ControlPoint' : DomPropAttribute(fname='radius', ret_socket='radius'),
         'CloudPoint'   : DomPropAttribute(fname='radius', ret_socket='radius'),
     },
@@ -2081,11 +2003,11 @@ INSTANCES = {
         'Instance':  DomStackMethod(self_='instances', fname='translate'),
     },
     'GeometryNodeInputInstanceScale': {
-        'Instances': PropAttribute(   fname='scale', ret_socket='scale', attr_domain='INSTANCE'),
+        'Instances': PropAttribute(domain='insts', fname='scale', ret_socket='scale'),
         'Instance':  DomPropAttribute(fname='scale', ret_socket='scale'),
     },
     'GeometryNodeInputInstanceRotation': {
-        'Instances': PropAttribute(   fname='rotation', ret_socket='rotation', attr_domain='INSTANCE'),
+        'Instances': PropAttribute(domain='insts', fname='rotation', ret_socket='rotation'),
         'Instance':  DomPropAttribute(fname='rotation', ret_socket='rotation'),
     },    
 }
@@ -2095,12 +2017,14 @@ MATERIAL = {
         'Geometry': StackMethod(self_='geometry'),
     },
     'GeometryNodeInputMaterialIndex': {
-        'Geometry':         PropAttribute(   ret_socket='material_index', attr_domain='FACE'),
-        ('Face', 'Spline'): DomPropAttribute(ret_socket='material_index'),
+        'Mesh':   PropAttribute(domain='faces', ret_socket='material_index'),
+        'Points': PropAttribute(domain='points', ret_socket='material_index'),
+        ('Face', 'CloudPoint'): DomPropAttribute(ret_socket='material_index'),
     },
     'GeometryNodeMaterialSelection': {
-        'Geometry': Attribute(   ret_socket='selection'),
-        'Domain':   DomAttribute(ret_socket='selection'),
+        'Mesh':   Attribute(domain='faces', ret_socket='selection'),
+        'Points': Attribute(domain='points', ret_socket='selection'),
+        'Domain': DomAttribute(ret_socket='selection'),
     },
     'GeometryNodeSetMaterial': {
         ('Mesh', 'Points', 'Volume'): StackMethod(self_='geometry'),
@@ -2112,7 +2036,7 @@ MATERIAL = {
     },
     'GeometryNodeSetMaterialIndex': {
         'Geometry': StackMethod(self_='geometry'),
-        ('Face', 'Spline'): [
+        ('Face', 'CloudPoint'): [
             DomStackMethod(self_='geometry'),
             DomSetter(fname='material_index', self_='geometry', material_index='attr_value'),
             ]
@@ -2220,27 +2144,28 @@ MESH = {
             ],
     },
     'GeometryNodeMeshFaceSetBoundaries': {
-        'Mesh': Attribute(   ret_socket='boundary_edges', attr_domain='FACE'),
+        'Mesh': Attribute(domain='faces', ret_socket='boundary_edges'),
         'Face': DomAttribute(ret_socket='boundary_edges'),
     },
     'GeometryNodeInputMeshFaceIsPlanar': {
-        'Mesh': Attribute(   ret_socket='planar', attr_domain='FACE'),
+        'Mesh': Attribute(domain='faces', ret_socket='planar'),
         'Face': DomAttribute(fname='is_planar', ret_socket='planar'),
     },
     'GeometryNodeInputShadeSmooth': {
-        'Mesh': Attribute(ret_socket='smooth', attr_domain='FACE'),
+        'Mesh': Attribute(domain='faces', ret_socket='smooth'),
         'Face': DomPropAttribute(fname='shade_smooth', ret_socket='smooth'),
     },
     'GeometryNodeInputMeshIsland': {
         'Mesh': [
-            PropAttribute(fname='island', attr_domain='FACE'),
+            PropAttribute(domain='faces', fname='island'),
             ],
         'Face': [
             DomPropAttribute(fname='island'),
             ],
     },
     'GeometryNodeInputShortestEdgePaths': {
-        'Mesh': Attribute(),
+        'Mesh':   Attribute(domain='verts'),
+        'Vertex': DomAttribute(),
     },
     'GeometryNodeInputMeshVertexNeighbors': {
         'Vertex': [
@@ -2258,8 +2183,8 @@ MESH = {
     # New V3.5
     
     'GeometryNodeEdgesToFaceGroups': {
-        'Mesh' : Attribute(ret_socket='face_group_id', attr_domain='EDGE'),
-        'Edge' : DomAttribute(fname='to_face_groups', ret_socket='face_group_id'),
+        'Mesh' : Attribute(domain='edges', ret_socket='face_group_id'),
+        'Edge' : DomPropAttribute(fname='to_face_groups', boundary_edges='self.selection', ret_socket='face_group_id'),
     },
     
 }
@@ -2300,41 +2225,41 @@ MESH_PRIMITIVES = {
 
 MESH_TOPOLOGY = {
     'GeometryNodeCornersOfFace':           {
-        'Mesh': Attribute(attr_domain='FACE'),
+        'Mesh': Attribute(domain='faces'),
         'Face': [
             DomAttribute(fname='corners',       face_index='self.selection_index', ),
             ]
         },
     'GeometryNodeCornersOfVertex':         {
-        'Mesh': Attribute(ret_socket=('corner_index', 'total')),
+        'Mesh': Attribute(domain='verts', ret_socket=('corner_index', 'total')),
         'Vertex': [
             DomAttribute(fname='corners',       vertex_index='self.selection_index'),
             ]
         },
     'GeometryNodeEdgesOfCorner':           {
-        'Mesh': Attribute(attr_domain='CORNER'),
+        'Mesh': Attribute(domain='corners'),
         'Corner': [
             DomAttribute(fname='edges',               corner_index='self.selection_index'),
             ]
         },
     'GeometryNodeEdgesOfVertex':           {
-        'Mesh': Attribute(),
+        'Mesh': Attribute(domain='verts'),
         'Vertex': [
-            DomAttribute(fname='edges',       vertex_index='self.selection_index'),
+            DomAttribute(fname='edges', vertex_index='self.selection_index'),
             ]
         },
     'GeometryNodeFaceOfCorner':            {
-        'Mesh': Attribute(attr_domain='CORNER'),
+        'Mesh': Attribute(domain='corners'),
         'Corner': [
             DomAttribute(fname='face',              corner_index='self.selection_index'),
             ]
         },
     'GeometryNodeOffsetCornerInFace':      {
-        'Mesh':   Attribute(ret_socket='corner_index', attr_domain='CORNER'),
+        'Mesh':   Attribute(domain='corners', ret_socket='corner_index'),
         'Corner': DomAttribute(fname='offset_in_face', corner_index='self.selection_index', ret_socket='corner_index'),
         },
     'GeometryNodeVertexOfCorner':          {
-        'Mesh':   Attribute(ret_socket='vertex_index', attr_domain='CORNER'),
+        'Mesh':   Attribute(domain='corners', ret_socket='vertex_index'),
         'Corner': DomPropAttribute(fname='vertex_index', corner_index='self.selection_index', ret_socket='vertex_index'),
         },
     }
@@ -2678,8 +2603,9 @@ UTILITIES = {
             ],
     },
     'GeometryNodeFieldAtIndex': {
-        'Geometry': Attribute(ret_socket='value', dtype=('data_type', 'value')),
-        'Domain'  : DomAttribute(ret_socket='value', dtype=('data_type', 'value')),
+        # Deprecated
+        #('Mesh', 'Curve', 'Points', 'Instances'): Attribute(ret_socket='value', dtype=('data_type', 'value')),
+        #'Domain'  : DomAttribute(ret_socket='value', dtype=('data_type', 'value')),
     },
     'ShaderNodeFloatCurve': {
         'Float' : Method(self_='value', ret_socket='value'),
@@ -2694,8 +2620,9 @@ UTILITIES = {
             ],
     },
     'GeometryNodeFieldOnDomain': {
-        'Geometry': Attribute(fname='interpolate_domain', dtype=('data_type', 'value'), ret_socket='value'),
-        'Domain': DomAttribute(fname='interpolate', dtype=('data_type', 'value'), ret_socket='value'),
+        # Deprecated
+        #('Mesh', 'Curve', 'Points', 'Instances'): Attribute(fname='interpolate_domain', dtype=('data_type', 'value'), ret_socket='value'),
+        #'Domain': DomAttribute(fname='interpolate', dtype=('data_type', 'value'), ret_socket='value'),
     },
     'ShaderNodeMapRange': {
         'Float': [
@@ -2928,11 +2855,11 @@ UTILITIES = {
 
 UV= {
     'GeometryNodeUVPackIslands': {
-        'Mesh': Attribute(ret_socket='uv', attr_domain='FACE'),
+        'Mesh': Attribute(domain='faces', ret_socket='uv'),
         'Face': DomAttribute(ret_socket='uv'),
     },
     'GeometryNodeUVUnwrap': {
-        'Mesh': Attribute(ret_socket='uv', attr_domain='FACE'),
+        'Mesh': Attribute(domain='faces', ret_socket='uv'),
         'Face': DomAttribute(ret_socket='uv'),
     },
 }
@@ -3026,11 +2953,12 @@ VOLUME = {
 
 V36 = {
     'GeometryNodeIndexOfNearest': {
-        'Geometry': Attribute(),
+        ('Mesh', 'Curve', 'Points', 'Instances'): Attribute(),
         'Domain'  : DomAttribute(),
     },
     'GeometryNodeInputSignedDistance': {
-        'Geometry': PropAttribute(ret_socket='signed_distance'),
+        # Not yet implemented ?
+        #'Geometry': PropAttribute(ret_socket='signed_distance'),
     },    
     'GeometryNodeMeanFilterSDFVolume': {
         'Volume': Method(self_='volume', fname='mean_filter_sdf_volume', ret_socket='volume', ret_class='Volume'),

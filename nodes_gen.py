@@ -2370,8 +2370,9 @@ def build_geonodes_auto_doc(fpath):
     
     class_docs  = Module(fpath + "core/class_docs.py")
     functions   = Module(fpath + "nodes/functions.py")
+    simulation  = Module(fpath + "core/simulation.py")
     
-    modules = [datasockets, domain, node, socket, tree, classes, domains, functions]
+    modules = [datasockets, domain, node, socket, tree, classes, domains, functions, simulation]
     
     # ----- Complementory doc
     
@@ -2419,7 +2420,6 @@ def build_geonodes_auto_doc(fpath):
         super_classes = 'Domain',
         super_module  = None
         )
-    
     
     # ----- Update the documentation
     
