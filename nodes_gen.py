@@ -1046,11 +1046,11 @@ class Arguments(list):
         
         vals = []
         
-        # ----- RULE 2 - extract the arg_rename dict
+        # ----- RULE 1 - extract the arg_rename dict
         
         fixed_args, arg_rename = self.extract_arg_rename(**kwargs)
         
-        # ---- RULE 3: Get the {arg}_VALUE entries and add a fixed entry
+        # ---- RULE 2 - Get the {arg}_VALUE entries and add a fixed entry
         
         new_fixed_args = {}
         for key in fixed_args:
@@ -2370,9 +2370,10 @@ def build_geonodes_auto_doc(fpath):
     
     class_docs  = Module(fpath + "core/class_docs.py")
     functions   = Module(fpath + "nodes/functions.py")
-    simulation  = Module(fpath + "core/simulation.py")
+    simulation  = Module(fpath + "core/simulation.py",   'ALL')
+    pointsmatrix  = Module(fpath + "core/pointsmatrix.py", 'ALL')
     
-    modules = [datasockets, domain, node, socket, tree, classes, domains, functions, simulation]
+    modules = [datasockets, domain, node, socket, tree, classes, domains, functions, simulation, pointsmatrix]
     
     # ----- Complementory doc
     
@@ -2429,8 +2430,9 @@ def build_geonodes_auto_doc(fpath):
                 f.writelines([line for line in module.functions.gen_markdown()])
             
         else:
+            print(f"Module {module.name}: {module.documented_classes}")
             for class_name in module.documented_classes:
-                #print(f"Documentation of {class_name}")
+                print(f"   documentation of {class_name}")
                 with open(fpath + f"docs/api/{class_name}.md", 'w') as f:
                     f.writelines(module.markdown(class_name))
                     
